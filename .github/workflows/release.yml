@@ -1,0 +1,74 @@
+name: Build & Release Shindo Launcher
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Configurar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Build Tauri
+        run: npm run tauri build
+
+      - name: Assinar binários
+        run: |
+          find src-tauri/target/release/bundle -type f ! -name "*.sig" -exec tauri signer sign \
+            --private-key-path .tauri/tauri-private-key.pem {} \;
+
+      - name: Gerar latest.json
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          echo "{" > latest.json
+          echo "  \"version\": \"${VERSION}\"," >> latest.json
+          echo "  \"notes\": \"Nova versão do Shindo Launcher.\"," >> latest.json
+          echo "  \"pub_date\": \"${DATE}\"," >> latest.json
+          echo "  \"platforms\": {" >> latest.json
+
+          # Windows
+          WIN_SIG=$(cat src-tauri/target/release/bundle/msi/*.sig | tr -d '\n')
+          WIN_FILE=$(basename src-tauri/target/release/bundle/msi/*.msi)
+          echo "    \"windows-x86_64\": {\"signature\": \"${WIN_SIG}\", \"url\": \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}/${WIN_FILE}\"}," >> latest.json
+
+          # Linux
+          LINUX_SIG=$(cat src-tauri/target/release/bundle/appimage/*.sig | tr -d '\n')
+          LINUX_FILE=$(basename src-tauri/target/release/bundle/appimage/*.AppImage)
+          echo "    \"linux-x86_64\": {\"signature\": \"${LINUX_SIG}\", \"url\": \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}/${LINUX_FILE}\"}," >> latest.json
+
+          # macOS
+          MAC_SIG=$(cat src-tauri/target/release/bundle/dmg/*.sig | tr -d '\n')
+          MAC_FILE=$(basename src-tauri/target/release/bundle/dmg/*.dmg)
+          echo "    \"darwin-x86_64\": {\"signature\": \"${MAC_SIG}\", \"url\": \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}/${MAC_FILE}\"}" >> latest.json
+
+          echo "  }" >> latest.json
+          echo "}" >> latest.json
+
+      - name: Upload para Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            src-tauri/target/release/bundle/**/*
+            latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
