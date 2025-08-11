@@ -1,6 +1,7 @@
 name: Build & Release Shindo Launcher
 
 on:
+  workflow_dispatch: # permite rodar manualmente
   release:
     types: [published]
 
