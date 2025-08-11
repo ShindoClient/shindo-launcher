@@ -1,0 +1,91 @@
+:root{
+    --bg:#0b0f14; --panel:#0e141c; --glass:rgba(18,24,33,.6);
+    --stroke:#1a2331; --text:#e8eef5; --muted:#9bb0c3; --accent:#5aa9ff; --accent-2:#7ac4ff;
+    --shadow:0 10px 40px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{margin:0;background:radial-gradient(1200px 800px at 20% -10%,#102033 0%,transparent 60%),var(--bg);color:var(--text);font:14px/1.4 Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Arial,sans-serif;}
+
+/* Shell */
+.shell{display:grid;grid-template-columns:260px 1fr;height:100%}
+.sidebar{
+    background:linear-gradient(180deg,#0f1622 0%, #0b111a 100%);
+    border-right:1px solid var(--stroke); padding:18px; display:flex; flex-direction:column;
+}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.logo{width:36px;height:36px;border-radius:10px;background:
+        radial-gradient(60% 60% at 30% 30%, var(--accent) 0%, var(--accent-2) 40%, transparent 41%),
+        linear-gradient(145deg,#1a7bd9,#2266aa); box-shadow:inset 0 0 20px rgba(90,169,255,.35)}
+.brand-text strong{display:block;font-size:15px}
+.brand-text span{color:var(--muted);font-size:12px}
+
+.menu{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.menu-link{color:var(--muted);padding:10px 12px;border-radius:10px;text-decoration:none;border:1px solid transparent}
+.menu-link.active, .menu-link:hover{color:var(--text);background:rgba(90,169,255,.06);border-color:rgba(90,169,255,.18)}
+
+.sidebar-footer{margin-top:auto;border-top:1px solid var(--stroke);padding-top:10px}
+.muted{color:var(--muted)}
+
+.main{display:grid;grid-template-rows:56px 1fr;min-width:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-bottom:1px solid var(--stroke);backdrop-filter:blur(6px);background:linear-gradient(180deg,rgba(18,24,33,.65),rgba(18,24,33,.45))}
+.topbar-title{font-weight:700;letter-spacing:.3px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.status-dot{width:10px;height:10px;border-radius:999px;display:inline-block}
+.status-dot.ok{background:#2ecc71;box-shadow:0 0 0 4px rgba(46,204,113,.15)}
+
+.content{padding:22px;overflow:auto}
+
+/* Cards / Controls */
+.card{
+    background:var(--glass); border:1px solid var(--stroke); border-radius:16px; padding:18px;
+    box-shadow:var(--shadow); backdrop-filter:blur(10px); animation:fadeIn .2s ease;
+}
+@keyframes fadeIn{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.row{display:flex;gap:14px;flex-wrap:wrap}
+label{color:var(--muted);font-size:12px}
+input,select{
+    background:#0d1219;border:1px solid var(--stroke);color:var(--text);padding:10px;border-radius:10px;min-width:140px;
+}
+
+button{
+    background:linear-gradient(180deg,var(--accent),#398fe7); color:#fff;border:0;border-radius:12px;
+    padding:12px 16px; cursor:pointer; font-weight:700; letter-spacing:.2px; box-shadow:0 10px 20px rgba(90,169,255,.25);
+    transition:transform .06s ease, filter .2s ease;
+}
+button:hover{filter:brightness(1.05)}
+button:active{transform:translateY(1px)}
+button.ghost{background:transparent;border:1px solid var(--stroke);color:var(--text);box-shadow:none}
+
+/* Progress */
+.progress{width:100%;height:12px;background:#0d1219;border-radius:999px;border:1px solid var(--stroke);overflow:hidden;position:relative}
+.progress > div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%;transition:width .25s ease}
+.progress::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.08) 50%,transparent 100%);background-size:200% 100%;animation:shimmer 1.6s infinite}
+@keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+
+.update-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.update-card {
+    background: var(--glass);
+    border: 1px solid var(--stroke);
+    border-radius: 16px;
+    padding: 28px;
+    width: 420px;
+    box-shadow: var(--shadow);
+    text-align: center;
+}
+
+.fade-out {
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}

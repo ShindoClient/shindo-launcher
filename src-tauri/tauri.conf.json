@@ -1,0 +1,38 @@
+{
+  "productName": "Shindo Launcher",
+  "version": "1.5.0",
+  "identifier": "com.shindo.launcher",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon_256x256.png",
+      "icons/icon_128x128.png",
+      "icons/icon_64x64.png",
+      "icons/icon_32x32.png",
+      "icons/icon_24x24.png",
+      "icons/icon_16x16.png"
+    ]
+  },
+  "app": {
+    "windows": [
+      { "title": "Shindo Launcher", "width": 1024, "height": 680, "resizable": true }
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/ShindoClient/Shindo-Launcher/releases/latest/download/latest.json"
+      ],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEyRUJDODE3MkUyRTA3OTEKUldTUkJ5NHVGOGpyb25UcXNZVU9OdWkxWDRVSVl2RlBIUUxnUkFMTitiWTliNlZ1Vmh1NXR2NDYK"
+    }
+  }
+}
