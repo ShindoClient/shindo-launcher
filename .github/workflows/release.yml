@@ -62,11 +62,13 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: Install deps
-        run: npm ci
-
-      - name: Build Tauri
-        run: npm run tauri:build
+      - name: Install dependencies
+        run: |
+          rm -rf node_modules package-lock.json
+          npm ci
+      
+      - name: Build Tauri app
+        run: npx @tauri-apps/cli@latest build
 
       # cria arquivo da chave privada a partir do secret
       - name: Write private key from secret
