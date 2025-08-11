@@ -21,22 +21,36 @@ jobs:
         with:
           node-version: 18
 
-      # --- Linux deps necessárias pro Tauri ---
-      - name: Install Linux dependencies
+        # --- Linux deps necessárias pro Tauri ---
+      - name: Install Linux dependencies (Ubuntu 24.04+)
         if: matrix.os == 'ubuntu-latest'
         run: |
+          set -e
           sudo apt-get update
+          # tenta 4.1; se estiver num runner antigo, cai para 4.0
+          if sudo apt-get install -y libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev; then
+            echo "webkit 4.1 ok"
+          else
+            echo "webkit 4.1 não disponível, tentando 4.0..."
+            sudo apt-get install -y libwebkit2gtk-4.0-dev libjavascriptcoregtk-4.0-dev libsoup-2.4-dev
+          fi
+      
+          # deps gerais do Tauri
           sudo apt-get install -y \
-            libwebkit2gtk-4.0-dev \
             build-essential \
             curl \
             wget \
             file \
+            pkg-config \
             libssl-dev \
             libgtk-3-dev \
-            libayatana-appindicator3-dev \
+            libglib2.0-dev \
             librsvg2-dev \
             patchelf
+      
+          # indicador da tray (em alguns runners libayatana... existe; senão usa libappindicator3-dev)
+          sudo apt-get install -y libayatana-appindicator3-dev || sudo apt-get install -y libappindicator3-dev
+      
 
       # Rust via rustup (sem action de terceiros)
       - name: Setup Rust toolchain
