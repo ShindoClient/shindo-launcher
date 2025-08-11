@@ -29,10 +29,18 @@ jobs:
       - name: Build Tauri
         run: npm run tauri build
 
+      - name: Criar arquivo da chave privada
+        shell: bash
+        run: |
+          echo "$TAURI_PRIVATE_KEY" > private-key.pem
+        env:
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+
       - name: Assinar binários
+        shell: bash
         run: |
           find src-tauri/target/release/bundle -type f ! -name "*.sig" -exec tauri signer sign \
-            --private-key-path .tauri/tauri-private-key.pem {} \;
+            --private-key-path private-key.pem {} \;
 
       - name: Gerar latest.json
         shell: bash
@@ -40,6 +48,7 @@ jobs:
           VERSION=${GITHUB_REF_NAME}
           DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+          # Criação do latest.json
           echo "{" > latest.json
           echo "  \"version\": \"${VERSION}\"," >> latest.json
           echo "  \"notes\": \"Nova versão do Shindo Launcher.\"," >> latest.json
