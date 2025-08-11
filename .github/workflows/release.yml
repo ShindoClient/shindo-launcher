@@ -1,9 +1,9 @@
-name: Build & Release Shindo Launcher
+name: Build & Release Shindo Launcher (no third‑party actions)
 
 on:
-  workflow_dispatch: # permite rodar manualmente
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,72 +13,103 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
 
     steps:
-      - name: Checkout código
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: Configurar Rust
-        uses: dtolnay/rust-toolchain@stable
+      # Instala/seleciona Rust sem usar actions de terceiros
+      - name: Setup Rust toolchain
+        shell: bash
+        run: |
+          rustup --version || (echo "Rustup não encontrado" && exit 1)
+          rustup toolchain install stable
+          rustup default stable
+          rustc --version
+          cargo --version
 
-      - name: Instalar dependências
-        run: npm install
+      - name: Install deps
+        run: npm ci
 
       - name: Build Tauri
         run: npm run tauri build
 
-      - name: Criar arquivo da chave privada
+      - name: Write private key from secret
         shell: bash
-        run: |
-          echo "$TAURI_PRIVATE_KEY" > private-key.pem
         env:
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+        run: |
+          test -n "$TAURI_PRIVATE_KEY" || { echo "TAURI_PRIVATE_KEY não definido"; exit 1; }
+          echo "$TAURI_PRIVATE_KEY" > private-key.pem
 
-      - name: Assinar binários
+      - name: Sign all bundles
         shell: bash
         run: |
-          find src-tauri/target/release/bundle -type f ! -name "*.sig" -exec tauri signer sign \
-            --private-key-path private-key.pem {} \;
+          set -e
+          find src-tauri/target/release/bundle -type f ! -name "*.sig" -print0 \
+            | xargs -0 -I {} tauri signer sign --private-key-path private-key.pem {}
 
-      - name: Gerar latest.json
+      - name: Generate latest.json
         shell: bash
         run: |
-          VERSION=${GITHUB_REF_NAME}
+          set -e
+          VERSION="${GITHUB_REF_NAME}"
           DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          # Criação do latest.json
+          # Coleta artefatos por SO (se um não existir, ignora)
+          WIN_FILE=$(ls src-tauri/target/release/bundle/msi/*.msi 2>/dev/null | head -n1 || true)
+          LINUX_FILE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage 2>/dev/null | head -n1 || true)
+          MAC_FILE=$(ls src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null | head -n1 || true)
+
+          WIN_SIG=""; [ -n "$WIN_FILE" ] && WIN_SIG=$(tr -d '\n' < "${WIN_FILE}.sig")
+          LINUX_SIG=""; [ -n "$LINUX_FILE" ] && LINUX_SIG=$(tr -d '\n' < "${LINUX_FILE}.sig")
+          MAC_SIG=""; [ -n "$MAC_FILE" ] && MAC_SIG=$(tr -d '\n' < "${MAC_FILE}.sig")
+
+          REPO="${GITHUB_REPOSITORY}"
+
           echo "{" > latest.json
           echo "  \"version\": \"${VERSION}\"," >> latest.json
           echo "  \"notes\": \"Nova versão do Shindo Launcher.\"," >> latest.json
           echo "  \"pub_date\": \"${DATE}\"," >> latest.json
           echo "  \"platforms\": {" >> latest.json
 
-          # Windows
-          WIN_SIG=$(cat src-tauri/target/release/bundle/msi/*.sig | tr -d '\n')
-          WIN_FILE=$(basename src-tauri/target/release/bundle/msi/*.msi)
-          echo "    \"windows-x86_64\": {\"signature\": \"${WIN_SIG}\", \"url\": \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}/${WIN_FILE}\"}," >> latest.json
+          FIRST=1
+          add_platform () {
+            local key="$1" sig="$2" file="$3"
+            [ -z "$file" ] && return 0
+            [ $FIRST -eq 1 ] && FIRST=0 || echo "    ,"
+            echo -n "    \"${key}\": {\"signature\": \"${sig}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$file")\"}" >> latest.json
+          }
 
-          # Linux
-          LINUX_SIG=$(cat src-tauri/target/release/bundle/appimage/*.sig | tr -d '\n')
-          LINUX_FILE=$(basename src-tauri/target/release/bundle/appimage/*.AppImage)
-          echo "    \"linux-x86_64\": {\"signature\": \"${LINUX_SIG}\", \"url\": \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}/${LINUX_FILE}\"}," >> latest.json
+          add_platform "windows-x86_64" "$WIN_SIG" "$WIN_FILE"
+          add_platform "linux-x86_64"   "$LINUX_SIG" "$LINUX_FILE"
+          add_platform "darwin-x86_64"  "$MAC_SIG" "$MAC_FILE"
 
-          # macOS
-          MAC_SIG=$(cat src-tauri/target/release/bundle/dmg/*.sig | tr -d '\n')
-          MAC_FILE=$(basename src-tauri/target/release/bundle/dmg/*.dmg)
-          echo "    \"darwin-x86_64\": {\"signature\": \"${MAC_SIG}\", \"url\": \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}/${MAC_FILE}\"}" >> latest.json
-
+          echo "" >> latest.json
           echo "  }" >> latest.json
           echo "}" >> latest.json
 
-      - name: Upload para Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            src-tauri/target/release/bundle/**/*
-            latest.json
+          cat latest.json
+
+      # Upload direto para a release com gh CLI (oficial, sem action externa)
+      - name: Upload assets to GitHub Release
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          VERSION="${GITHUB_REF_NAME}"
+
+          # Garante que 'gh' está logado com o token
+          echo "$GITHUB_TOKEN" | gh auth login --with-token
+
+          # Sobe todos os bundles e .sig
+          gh release upload "$VERSION" \
+            $(find src-tauri/target/release/bundle -type f) \
+            --clobber
+
+          # Sobe latest.json (nome fixo)
+          gh release upload "$VERSION" latest.json --clobber
