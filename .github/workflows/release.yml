@@ -10,7 +10,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Checkout
@@ -21,7 +21,24 @@ jobs:
         with:
           node-version: 18
 
-      # Instala/seleciona Rust sem usar actions de terceiros
+      # --- Linux deps necessárias pro Tauri ---
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.0-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      # Rust via rustup (sem action de terceiros)
       - name: Setup Rust toolchain
         shell: bash
         run: |
@@ -37,6 +54,7 @@ jobs:
       - name: Build Tauri
         run: npm run tauri build
 
+      # cria arquivo da chave privada a partir do secret
       - name: Write private key from secret
         shell: bash
         env:
@@ -45,71 +63,69 @@ jobs:
           test -n "$TAURI_PRIVATE_KEY" || { echo "TAURI_PRIVATE_KEY não definido"; exit 1; }
           echo "$TAURI_PRIVATE_KEY" > private-key.pem
 
+      # assina todos os bundles gerados (msi, dmg, AppImage, etc.)
       - name: Sign all bundles
         shell: bash
         run: |
           set -e
-          find src-tauri/target/release/bundle -type f ! -name "*.sig" -print0 \
-            | xargs -0 -I {} tauri signer sign --private-key-path private-key.pem {}
+          shopt -s globstar nullglob
+          files=(src-tauri/target/release/bundle/**/*)
+          for f in "${files[@]}"; do
+            [[ -f "$f" && "$f" != *.sig ]] || continue
+            npx --yes @tauri-apps/cli signer sign --private-key-path private-key.pem "$f"
+          done
 
+      # gera latest.json com URLs da própria release
       - name: Generate latest.json
         shell: bash
         run: |
           set -e
           VERSION="${GITHUB_REF_NAME}"
           DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          REPO="${GITHUB_REPOSITORY}"
 
-          # Coleta artefatos por SO (se um não existir, ignora)
           WIN_FILE=$(ls src-tauri/target/release/bundle/msi/*.msi 2>/dev/null | head -n1 || true)
           LINUX_FILE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage 2>/dev/null | head -n1 || true)
           MAC_FILE=$(ls src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null | head -n1 || true)
 
-          WIN_SIG=""; [ -n "$WIN_FILE" ] && WIN_SIG=$(tr -d '\n' < "${WIN_FILE}.sig")
+          WIN_SIG="";   [ -n "$WIN_FILE" ]   && WIN_SIG=$(tr -d '\n' < "${WIN_FILE}.sig")
           LINUX_SIG=""; [ -n "$LINUX_FILE" ] && LINUX_SIG=$(tr -d '\n' < "${LINUX_FILE}.sig")
-          MAC_SIG=""; [ -n "$MAC_FILE" ] && MAC_SIG=$(tr -d '\n' < "${MAC_FILE}.sig")
+          MAC_SIG="";   [ -n "$MAC_FILE" ]   && MAC_SIG=$(tr -d '\n' < "${MAC_FILE}.sig")
 
-          REPO="${GITHUB_REPOSITORY}"
-
-          echo "{" > latest.json
-          echo "  \"version\": \"${VERSION}\"," >> latest.json
-          echo "  \"notes\": \"Nova versão do Shindo Launcher.\"," >> latest.json
-          echo "  \"pub_date\": \"${DATE}\"," >> latest.json
-          echo "  \"platforms\": {" >> latest.json
-
-          FIRST=1
-          add_platform () {
-            local key="$1" sig="$2" file="$3"
-            [ -z "$file" ] && return 0
-            [ $FIRST -eq 1 ] && FIRST=0 || echo "    ,"
-            echo -n "    \"${key}\": {\"signature\": \"${sig}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$file")\"}" >> latest.json
+          cat > latest.json <<JSON
+          {
+            "version": "${VERSION}",
+            "notes": "Nova versão do Shindo Launcher.",
+            "pub_date": "${DATE}",
+            "platforms": {
+                           ${WIN_FILE:+\"windows-x86_64\": {\"signature\": \"${WIN_SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$WIN_FILE")\"}$([ -n "$LINUX_FILE$MAC_FILE" ] && echo ",")}
+            ${LINUX_FILE:+\"linux-x86_64\": {\"signature\": \"${LINUX_SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$LINUX_FILE")\"}$([ -n "$MAC_FILE" ] && echo ",")}
+            ${MAC_FILE:+\"darwin-x86_64\": {\"signature\": \"${MAC_SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$MAC_FILE")\"}}
+            }
           }
+          JSON
+          echo "latest.json:"; cat latest.json
 
-          add_platform "windows-x86_64" "$WIN_SIG" "$WIN_FILE"
-          add_platform "linux-x86_64"   "$LINUX_SIG" "$LINUX_FILE"
-          add_platform "darwin-x86_64"  "$MAC_SIG" "$MAC_FILE"
+      # (opcional) guardar como artifact
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.os }}
+          path: |
+            src-tauri/target/release/bundle/**/*
+            latest.json
 
-          echo "" >> latest.json
-          echo "  }" >> latest.json
-          echo "}" >> latest.json
-
-          cat latest.json
-
-      # Upload direto para a release com gh CLI (oficial, sem action externa)
-      - name: Upload assets to GitHub Release
+      # publica na release usando GH CLI (oficial)
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         env:
+          # use GH_PAT se você criou um PAT; senão usa o token padrão
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           set -e
           VERSION="${GITHUB_REF_NAME}"
-
-          # Garante que 'gh' está logado com o token
           echo "$GITHUB_TOKEN" | gh auth login --with-token
-
-          # Sobe todos os bundles e .sig
           gh release upload "$VERSION" \
-            $(find src-tauri/target/release/bundle -type f) \
-            --clobber
-
-          # Sobe latest.json (nome fixo)
-          gh release upload "$VERSION" latest.json --clobber
+            $(find src-tauri/target/release/bundle -type f) latest.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
