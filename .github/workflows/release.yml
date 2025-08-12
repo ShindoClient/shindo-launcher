@@ -23,26 +23,20 @@ jobs:
             ext: dmg
 
     steps:
-      # 1️⃣ Checkout
       - uses: actions/checkout@v4
 
-      # 2️⃣ Node
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 3️⃣ Rust
       - uses: dtolnay/rust-toolchain@stable
 
-      # 4️⃣ Instalar dependências
       - name: Install dependencies
         run: npm install
 
-      # 5️⃣ Build usando npx
       - name: Build Tauri App
         run: npx tauri build
 
-      # 6️⃣ Encontrar binário gerado
       - name: Find binary
         id: find_bin
         shell: bash
@@ -50,39 +44,34 @@ jobs:
           FILE_PATH=$(find src-tauri/target/release/bundle -type f -name "*.${{ matrix.ext }}" | head -n 1)
           echo "file=$FILE_PATH" >> $GITHUB_OUTPUT
 
-      # 7️⃣ Assinar
       - name: Sign app
         id: sign_app
         run: |
           SIGNATURE=$(npx tauri signer sign --private-key "${{ secrets.TAURI_PRIVATE_KEY }}" --ci --file "${{ steps.find_bin.outputs.file }}")
+          echo "$SIGNATURE" > signature.txt
           echo "signature=$SIGNATURE" >> $GITHUB_OUTPUT
 
-      # 8️⃣ Upload artefatos (para juntar depois no Linux)
       - uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.platform }}
-          path: |
-            ${{ steps.find_bin.outputs.file }}
+          path: ${{ steps.find_bin.outputs.file }}
           if-no-files-found: error
+
       - uses: actions/upload-artifact@v4
         with:
           name: signature-${{ matrix.platform }}
           path: signature.txt
-        run: echo "${{ steps.sign_app.outputs.signature }}" > signature.txt
 
-  # Job para criar release e latest.json
   release:
     runs-on: ubuntu-latest
     needs: build
     steps:
       - uses: actions/checkout@v4
 
-      # Baixar todos os binários
       - uses: actions/download-artifact@v4
         with:
           path: dist
 
-      # Criar latest.json com todas plataformas
       - name: Create latest.json
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
@@ -104,7 +93,6 @@ jobs:
           echo "  }" >> latest.json
           echo "}" >> latest.json
 
-      # Criar release
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
