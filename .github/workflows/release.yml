@@ -7,97 +7,100 @@ on:
 
 jobs:
   build:
+    name: Build ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
         include:
           - os: ubuntu-latest
-            platform: linux-x86_64
-            ext: AppImage
+            target: x86_64-unknown-linux-gnu
           - os: windows-latest
-            platform: windows-x86_64
-            ext: exe
+            target: x86_64-pc-windows-msvc
           - os: macos-latest
-            platform: darwin-x86_64
-            ext: dmg
+            target: universal-apple-darwin
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+          npm install @tauri-apps/cli@latest --save-dev
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            npm install @tauri-apps/cli-darwin-universal --save-dev || true
+          elif [[ "$RUNNER_OS" == "Linux" ]]; then
+            npm install @tauri-apps/cli-linux-x64-gnu --save-dev || true
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            npm install @tauri-apps/cli-win32-x64-msvc --save-dev || true
+          fi
 
-      - name: Build Tauri App
+      - name: Build Tauri App (Signed)
+        env:
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         run: npx tauri build
 
-      - name: Find binary
-        id: find_bin
-        shell: bash
+      - name: Generate latest.json
         run: |
-          FILE_PATH=$(find src-tauri/target/release/bundle -type f -name "*.${{ matrix.ext }}" | head -n 1)
-          echo "file=$FILE_PATH" >> $GITHUB_OUTPUT
+          VERSION=${GITHUB_REF#refs/tags/}
+          OUTPUT_DIR="src-tauri/target/release/bundle"
+          SIG_FILE=$(find "$OUTPUT_DIR" -name "*.sig" | head -n 1)
+          APP_FILE=$(find "$OUTPUT_DIR" -name "*.AppImage" -o -name "*.exe" -o -name "*.dmg" | head -n 1)
+          SHA512=$(shasum -a 512 "$APP_FILE" | awk '{print $1}')
+          cat > latest.json <<EOF
+          {
+            "version": "$VERSION",
+            "notes": "Auto-generated release for $VERSION",
+            "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "platforms": {
+              "${{ matrix.target }}": {
+                "signature": "$(cat $SIG_FILE)",
+                "url": "https://github.com/${{ github.repository }}/releases/download/$VERSION/$(basename $APP_FILE)",
+                "sha512": "$SHA512"
+              }
+            }
+          }
+          EOF
 
-      - name: Sign app
-        id: sign_app
-        run: |
-          SIGNATURE=$(npx tauri signer sign --private-key "${{ secrets.TAURI_PRIVATE_KEY }}" --ci --file "${{ steps.find_bin.outputs.file }}")
-          echo "$SIGNATURE" > signature.txt
-          echo "signature=$SIGNATURE" >> $GITHUB_OUTPUT
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: build-${{ matrix.platform }}
-          path: ${{ steps.find_bin.outputs.file }}
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: signature-${{ matrix.platform }}
-          path: signature.txt
+          name: ${{ matrix.os }}-artifacts
+          path: |
+            src-tauri/target/release/bundle/**
+            latest.json
 
   release:
+    name: Create Release
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
-          path: dist
+          path: artifacts
 
-      - name: Create latest.json
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      - name: List downloaded files
+        run: ls -R artifacts
 
-          echo "{" > latest.json
-          echo "  \"version\": \"${VERSION}\"," >> latest.json
-          echo "  \"notes\": \"Nova versão do Shindo Launcher.\"," >> latest.json
-          echo "  \"pub_date\": \"${DATE}\"," >> latest.json
-          echo "  \"platforms\": {" >> latest.json
-
-          for platform in linux-x86_64 windows-x86_64 darwin-x86_64; do
-            FILE=$(find dist/build-$platform -type f)
-            SIG=$(cat dist/signature-$platform/signature.txt)
-            echo "    \"$platform\": {\"signature\": \"$SIG\", \"url\": \"https://github.com/${{ github.repository }}/releases/download/${VERSION}/$(basename "$FILE")\"}," >> latest.json
-          done
-
-          sed -i '$ s/,$//' latest.json
-          echo "  }" >> latest.json
-          echo "}" >> latest.json
-
-      - name: Upload Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/build-*/**
-            latest.json
+          tag_name: ${{ github.ref_name }}
+          files: artifacts/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
