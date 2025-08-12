@@ -29,7 +29,7 @@
         ]
       },
       "appimage": {
-        "useSystemLibraries": true
+        "category": "Utility"
       }
     }
   },
