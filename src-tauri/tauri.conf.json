@@ -10,6 +10,9 @@
   },
   "bundle": {
     "active": true,
+    "category": "Game",
+    "copyright": "ShindoLauncher",
+    "publisher": "Miki IT Services",
     "icon": [
       "icons/icon.ico",
       "icons/icon_256x256.png",
@@ -19,23 +22,56 @@
       "icons/icon_24x24.png",
       "icons/icon_16x16.png"
     ],
-    "targets": "all",
+    "shortDescription": "A ShindoClient launcher for Minecraft",
+    "longDescription": "A ShindoClient launcher for the game Minecraft",
+    "license": "GPL-3.0",
+    "licenseFile": "../LICENSE",
     "resources": [],
-    "linux": {
-      "deb": {
-        "depends": [
-          "libwebkit2gtk-4.1-0",
-          "libgtk-3-0"
-        ]
-      },
-      "appimage": {
-        "category": "Utility"
+    "targets": "all",
+    "createUpdaterArtifacts": "v1Compatible",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
       }
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    },
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
     }
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
-      { "title": "Shindo Launcher", "width": 1024, "height": 680, "resizable": true }
+      {
+        "title": "ShindoLauncher",
+        "label": "main",
+        "width": 1000,
+        "minWidth": 1000,
+        "height": 670,
+        "minHeight": 670,
+        "resizable": true,
+        "fullscreen": false,
+        "transparent": true,
+        "decorations": false,
+        "center": true,
+        "windowEffects": {
+          "effects": [
+            "acrylic"
+          ]
+        },
+        "shadow": true
+      }
     ]
   },
   "plugins": {
