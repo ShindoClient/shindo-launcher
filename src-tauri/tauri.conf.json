@@ -19,9 +19,14 @@
       "icons/icon_24x24.png",
       "icons/icon_16x16.png"
     ],
+    "targets": "all",
+    "resources": [],
     "linux": {
       "deb": {
-        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"]
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0"
+        ]
       },
       "appimage": {
         "useSystemLibraries": true

@@ -1,4 +1,4 @@
-name: Build & Release Shindo Launcher (no third‑party actions)
+name: Build & Release Shindo Launcher
 
 on:
   release:
@@ -13,114 +13,58 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # 1️⃣ Checar repositório
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      # 2️⃣ Node
+      - uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      # 3️⃣ Rust
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
+      # 4️⃣ Instalar deps
+      - name: Install dependencies
+        run: npm install
+
+      # 5️⃣ Build do Tauri
+      - name: Build Tauri App
+        run: npm run tauri build
+
+      # 6️⃣ Assinar binário
+      - name: Sign app for Tauri Updater
         run: |
-          set -e
-          sudo apt-get update
-          if sudo apt-get install -y libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev; then
-            echo "Usando webkit 4.1"
-          else
-            echo "webkit 4.1 não encontrado, usando 4.0"
-            sudo apt-get install -y libwebkit2gtk-4.0-dev libjavascriptcoregtk-4.0-dev libsoup-2.4-dev
-          fi
-          sudo apt-get install -y \
-            build-essential curl wget file pkg-config libssl-dev \
-            libgtk-3-dev libglib2.0-dev librsvg2-dev patchelf \
-            libayatana-appindicator3-dev || sudo apt-get install -y libappindicator3-dev
+          FILE_PATH=$(find src-tauri/target/release/bundle -type f \( -name "*.exe" -o -name "*.AppImage" -o -name "*.dmg" \) | head -n 1)
+          SIGNATURE=$(npx tauri signer sign --private-key "${{ secrets.TAURI_PRIVATE_KEY }}" --ci --file "$FILE_PATH")
+          echo "SIGNATURE=$SIGNATURE" >> $GITHUB_ENV
+          echo "FILE_PATH=$FILE_PATH" >> $GITHUB_ENV
 
-      - name: Prepare dependencies
-        shell: bash
-        run: |
-          node -e "try{let p=require('./package.json'); if(p.devDependencies && p.devDependencies['@tauri-apps/cli']){delete p.devDependencies['@tauri-apps/cli']; require('fs').writeFileSync('package.json', JSON.stringify(p,null,2)); console.log('removed local @tauri-apps/cli');}}catch(e){console.log('no package.json or no local cli')}"
-          rm -rf node_modules package-lock.json
-          npm cache clean --force
-          npm install
-
-      - name: Build Tauri
-        run: npx --yes --package @tauri-apps/cli@latest tauri build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.os }}-artifacts
-          path: |
-            src-tauri/target/release/bundle/**/*
-            !**/*.dSYM
-
-  release:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install GitHub CLI
-        run: sudo apt-get update && sudo apt-get install -y gh jq
-
-      - name: Download all build artifacts
-        run: |
-          mkdir artifacts
-          for OS in ubuntu-latest windows-latest macos-latest; do
-            RUN_ID=$(gh run list --workflow=Release --json databaseId --limit 1 | jq -r '.[0].databaseId')
-            gh run download "$RUN_ID" --name "${OS}-artifacts" --dir artifacts
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate latest.json
+      # 7️⃣ Criar latest.json
+      - name: Create latest.json
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
           DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          REPO="ShindoClient/Shindo-Launcher"
+          cat > latest.json <<JSON
+          {
+            "version": "${VERSION}",
+            "notes": "Nova versão do Shindo Launcher.",
+            "pub_date": "${DATE}",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "${SIGNATURE}",
+                "url": "https://github.com/${{ github.repository }}/releases/download/${VERSION}/$(basename "$FILE_PATH")"
+              }
+            }
+          }
+          JSON
 
-          WIN_FILE=$(find artifacts -type f -name "*.msi" -o -name "*.exe" | head -n 1)
-          LINUX_FILE=$(find artifacts -type f -name "*.AppImage" -o -name "*.deb" | head -n 1)
-          MAC_FILE=$(find artifacts -type f -name "*.dmg" -o -name "*.pkg" | head -n 1)
-
-          echo "{" > latest.json
-          echo "  \"version\": \"${VERSION}\"," >> latest.json
-          echo "  \"notes\": \"Nova versão do Shindo Launcher.\"," >> latest.json
-          echo "  \"pub_date\": \"${DATE}\"," >> latest.json
-          echo "  \"platforms\": {" >> latest.json
-
-          FIRST=true
-          if [ -n "$WIN_FILE" ]; then
-            SIG=$(shasum -a 256 "$WIN_FILE" | cut -d ' ' -f 1)
-            echo "    \"windows-x86_64\": {\"signature\": \"${SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$WIN_FILE")\"}" >> latest.json
-            FIRST=false
-          fi
-          if [ -n "$LINUX_FILE" ]; then
-            [ "$FIRST" = false ] && echo "," >> latest.json
-            SIG=$(shasum -a 256 "$LINUX_FILE" | cut -d ' ' -f 1)
-            echo "    \"linux-x86_64\": {\"signature\": \"${SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$LINUX_FILE")\"}" >> latest.json
-            FIRST=false
-          fi
-          if [ -n "$MAC_FILE" ]; then
-            [ "$FIRST" = false ] && echo "," >> latest.json
-            SIG=$(shasum -a 256 "$MAC_FILE" | cut -d ' ' -f 1)
-            echo "    \"darwin-x86_64\": {\"signature\": \"${SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$MAC_FILE")\"}" >> latest.json
-          fi
-
-          echo "  }" >> latest.json
-          echo "}" >> latest.json
-
-      - name: Publish GitHub Release
+      # 8️⃣ Upload para release
+      - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/**/*
+            ${{ env.FILE_PATH }}
             latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
