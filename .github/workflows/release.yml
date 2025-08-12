@@ -41,6 +41,7 @@ jobs:
             libayatana-appindicator3-dev || sudo apt-get install -y libappindicator3-dev
 
       - name: Prepare dependencies
+        shell: bash
         run: |
           node -e "try{let p=require('./package.json'); if(p.devDependencies && p.devDependencies['@tauri-apps/cli']){delete p.devDependencies['@tauri-apps/cli']; require('fs').writeFileSync('package.json', JSON.stringify(p,null,2)); console.log('removed local @tauri-apps/cli');}}catch(e){console.log('no package.json or no local cli')}"
           rm -rf node_modules package-lock.json
