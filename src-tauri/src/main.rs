@@ -5,6 +5,13 @@ use serde::{Serialize, Deserialize};
 use dirs::home_dir;
 use anyhow::Result;
 
+use std::{fs, path::PathBuf};
+use reqwest::Client;
+use tokio::io::AsyncWriteExt;
+use std::process::Command;
+use zip::ZipArchive;
+use std::io::Cursor;
+
 #[derive(Serialize, Deserialize, Clone)]
 struct Settings { ram: u64, width: u32, height: u32, fullscreen: bool }
 
@@ -48,11 +55,77 @@ async fn save_settings(ram: u64, width: u32, height: u32, fullscreen: bool) -> R
   fs::write(settings_file(), txt).map_err(|e| e.to_string())
 }
 
+fn java_dir() -> PathBuf {
+    // Exemplo: ~/.shindo/java
+    dirs::home_dir()
+        .unwrap()
+        .join(".shindo")
+        .join("java")
+}
+
 #[tauri::command]
 async fn ensure_java() -> Result<(), String> {
-  fs::create_dir_all(java_dir()).map_err(|e| e.to_string())?;
-  // TODO: baixar Azul Zulu JDK dinamicamente por SO/arch
-  Ok(())
+    fs::create_dir_all(java_dir()).map_err(|e| e.to_string())?;
+
+    // Detecta OS/Arch
+    let os = std::env::consts::OS; // "windows", "linux", "macos"
+    let arch = std::env::consts::ARCH; // "x86_64", "aarch64"
+
+    // Escolhe o link correto do Azul Zulu JDK 8
+    let url = match (os, arch) {
+        ("windows", "x86_64") => "https://cdn.azul.com/zulu/bin/zulu8.80.0.15-ca-jdk8.0.422-win_x64.zip",
+        ("linux", "x86_64") => "https://cdn.azul.com/zulu/bin/zulu8.80.0.15-ca-jdk8.0.422-linux_x64.tar.gz",
+        ("macos", "x86_64") => "https://cdn.azul.com/zulu/bin/zulu8.80.0.15-ca-jdk8.0.422-macosx_x64.zip",
+        ("macos", "aarch64") => "https://cdn.azul.com/zulu/bin/zulu8.80.0.15-ca-jdk8.0.422-macosx_aarch64.zip",
+        _ => return Err(format!("SO/Arch não suportado: {}/{}", os, arch)),
+    };
+
+    let filename = url.split('/').last().unwrap();
+
+    let java_path = java_dir();
+    let file_path = java_path.join(filename);
+
+    // Se já tiver baixado, pula
+    if file_path.exists() {
+        return Ok(());
+    }
+
+    println!("Baixando Java de {}", url);
+
+    let client = Client::new();
+    let resp = client.get(url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .bytes()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut file = tokio::fs::File::create(&file_path)
+        .await
+        .map_err(|e| e.to_string())?;
+    file.write_all(&resp).await.map_err(|e| e.to_string())?;
+    file.flush().await.map_err(|e| e.to_string())?;
+
+    // Extrai dependendo do formato
+    if filename.ends_with(".zip") {
+        let reader = std::fs::File::open(&file_path).map_err(|e| e.to_string())?;
+        let mut archive = ZipArchive::new(reader).map_err(|e| e.to_string())?;
+        archive.extract(&java_path).map_err(|e| e.to_string())?;
+    } else if filename.ends_with(".tar.gz") {
+        let status = Command::new("tar")
+            .arg("-xzf")
+            .arg(file_path.to_string_lossy().to_string())
+            .arg("-C")
+            .arg(java_path.to_string_lossy().to_string())
+            .status()
+            .map_err(|e| e.to_string())?;
+        if !status.success() {
+            return Err("Falha ao extrair o tar.gz".into());
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
