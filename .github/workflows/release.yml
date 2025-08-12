@@ -10,32 +10,32 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-        # --- Linux deps necessárias pro Tauri ---
-      - name: Install Linux dependencies (Ubuntu 24.04+)
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Dependências do Linux (Ubuntu)
+      - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           set -e
           sudo apt-get update
-          # tenta 4.1; se estiver num runner antigo, cai para 4.0
           if sudo apt-get install -y libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev; then
-            echo "webkit 4.1 ok"
+            echo "Usando webkit 4.1"
           else
-            echo "webkit 4.1 não disponível, tentando 4.0..."
+            echo "webkit 4.1 não encontrado, usando 4.0"
             sudo apt-get install -y libwebkit2gtk-4.0-dev libjavascriptcoregtk-4.0-dev libsoup-2.4-dev
           fi
-      
-          # deps gerais do Tauri
           sudo apt-get install -y \
             build-essential \
             curl \
@@ -47,101 +47,80 @@ jobs:
             libglib2.0-dev \
             librsvg2-dev \
             patchelf
-      
-          # indicador da tray (em alguns runners libayatana... existe; senão usa libappindicator3-dev)
           sudo apt-get install -y libayatana-appindicator3-dev || sudo apt-get install -y libappindicator3-dev
-      
 
-      # Rust via rustup (sem action de terceiros)
-      - name: Setup Rust toolchain
-        shell: bash
+      # Instala dependências limpas e remove CLI local do Tauri
+      - name: Prepare dependencies
         run: |
-          rustup --version || (echo "Rustup não encontrado" && exit 1)
-          rustup toolchain install stable
-          rustup default stable
-          rustc --version
-          cargo --version
+          node -e "try{let p=require('./package.json'); if(p.devDependencies && p.devDependencies['@tauri-apps/cli']){delete p.devDependencies['@tauri-apps/cli']; require('fs').writeFileSync('package.json', JSON.stringify(p,null,2)); console.log('removed local @tauri-apps/cli');}}catch(e){console.log('no package.json or no local cli')}"
+          rm -rf node_modules package-lock.json
+          npm cache clean --force
+          npm install
 
-      - name: Install dependencies
-        run: |
-          rm -rf node_modules
-          npm ci
-      
-      - name: Build Tauri app
-        run: npx @tauri-apps/cli@latest build
+      # Build usando CLI remoto para evitar bug do npm no macOS
+      - name: Build Tauri
+        run: npx --yes --package @tauri-apps/cli@latest tauri build
 
-      # cria arquivo da chave privada a partir do secret
-      - name: Write private key from secret
-        shell: bash
-        env:
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-        run: |
-          test -n "$TAURI_PRIVATE_KEY" || { echo "TAURI_PRIVATE_KEY não definido"; exit 1; }
-          echo "$TAURI_PRIVATE_KEY" > private-key.pem
-
-      # assina todos os bundles gerados (msi, dmg, AppImage, etc.)
-      - name: Sign all bundles
-        shell: bash
-        run: |
-          set -e
-          shopt -s globstar nullglob
-          files=(src-tauri/target/release/bundle/**/*)
-          for f in "${files[@]}"; do
-            [[ -f "$f" && "$f" != *.sig ]] || continue
-            npx --yes @tauri-apps/cli signer sign --private-key-path private-key.pem "$f"
-          done
-
-      # gera latest.json com URLs da própria release
-      - name: Generate latest.json
-        shell: bash
-        run: |
-          set -e
-          VERSION="${GITHUB_REF_NAME}"
-          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          REPO="${GITHUB_REPOSITORY}"
-
-          WIN_FILE=$(ls src-tauri/target/release/bundle/msi/*.msi 2>/dev/null | head -n1 || true)
-          LINUX_FILE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage 2>/dev/null | head -n1 || true)
-          MAC_FILE=$(ls src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null | head -n1 || true)
-
-          WIN_SIG="";   [ -n "$WIN_FILE" ]   && WIN_SIG=$(tr -d '\n' < "${WIN_FILE}.sig")
-          LINUX_SIG=""; [ -n "$LINUX_FILE" ] && LINUX_SIG=$(tr -d '\n' < "${LINUX_FILE}.sig")
-          MAC_SIG="";   [ -n "$MAC_FILE" ]   && MAC_SIG=$(tr -d '\n' < "${MAC_FILE}.sig")
-
-          cat > latest.json <<JSON
-          {
-            "version": "${VERSION}",
-            "notes": "Nova versão do Shindo Launcher.",
-            "pub_date": "${DATE}",
-            "platforms": {
-                           ${WIN_FILE:+\"windows-x86_64\": {\"signature\": \"${WIN_SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$WIN_FILE")\"}$([ -n "$LINUX_FILE$MAC_FILE" ] && echo ",")}
-            ${LINUX_FILE:+\"linux-x86_64\": {\"signature\": \"${LINUX_SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$LINUX_FILE")\"}$([ -n "$MAC_FILE" ] && echo ",")}
-            ${MAC_FILE:+\"darwin-x86_64\": {\"signature\": \"${MAC_SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$MAC_FILE")\"}}
-            }
-          }
-          JSON
-          echo "latest.json:"; cat latest.json
-
-      # (opcional) guardar como artifact
+      # Upload artefatos para poder usar no passo do latest.json
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bundle-${{ matrix.os }}
+          name: ${{ matrix.os }}-artifacts
           path: |
             src-tauri/target/release/bundle/**/*
-            latest.json
+            !**/*.dSYM
 
-      # publica na release usando GH CLI (oficial)
-      - name: Upload to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        env:
-          # use GH_PAT se você criou um PAT; senão usa o token padrão
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate latest.json
         run: |
-          set -e
-          VERSION="${GITHUB_REF_NAME}"
-          echo "$GITHUB_TOKEN" | gh auth login --with-token
-          gh release upload "$VERSION" \
-            $(find src-tauri/target/release/bundle -type f) latest.json \
-            --repo "$GITHUB_REPOSITORY" --clobber
+          VERSION=${GITHUB_REF#refs/tags/}
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          REPO="ShindoClient/Shindo-Launcher"
+
+          WIN_FILE=$(find artifacts -type f -name "*.msi" -o -name "*.exe" | head -n 1)
+          LINUX_FILE=$(find artifacts -type f -name "*.AppImage" -o -name "*.deb" | head -n 1)
+          MAC_FILE=$(find artifacts -type f -name "*.dmg" -o -name "*.pkg" | head -n 1)
+
+          echo "{" > latest.json
+          echo "  \"version\": \"${VERSION}\"," >> latest.json
+          echo "  \"notes\": \"Nova versão do Shindo Launcher.\"," >> latest.json
+          echo "  \"pub_date\": \"${DATE}\"," >> latest.json
+          echo "  \"platforms\": {" >> latest.json
+
+          FIRST=true
+          if [ -n "$WIN_FILE" ]; then
+            SIG=$(shasum -a 256 "$WIN_FILE" | cut -d ' ' -f 1)
+            echo "    \"windows-x86_64\": {\"signature\": \"${SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$WIN_FILE")\"}" >> latest.json
+            FIRST=false
+          fi
+          if [ -n "$LINUX_FILE" ]; then
+            [ "$FIRST" = false ] && echo "," >> latest.json
+            SIG=$(shasum -a 256 "$LINUX_FILE" | cut -d ' ' -f 1)
+            echo "    \"linux-x86_64\": {\"signature\": \"${SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$LINUX_FILE")\"}" >> latest.json
+            FIRST=false
+          fi
+          if [ -n "$MAC_FILE" ]; then
+            [ "$FIRST" = false ] && echo "," >> latest.json
+            SIG=$(shasum -a 256 "$MAC_FILE" | cut -d ' ' -f 1)
+            echo "    \"darwin-x86_64\": {\"signature\": \"${SIG}\", \"url\": \"https://github.com/${REPO}/releases/download/${VERSION}/$(basename "$MAC_FILE")\"}" >> latest.json
+          fi
+
+          echo "  }" >> latest.json
+          echo "}" >> latest.json
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/* 
+            latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
