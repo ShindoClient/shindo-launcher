@@ -11,9 +11,19 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            ext: AppImage
+          - os: windows-latest
+            platform: windows-x86_64
+            ext: exe
+          - os: macos-latest
+            platform: darwin-x86_64
+            ext: dmg
 
     steps:
-      # 1️⃣ Checar repositório
+      # 1️⃣ Checkout
       - uses: actions/checkout@v4
 
       # 2️⃣ Node
@@ -24,47 +34,82 @@ jobs:
       # 3️⃣ Rust
       - uses: dtolnay/rust-toolchain@stable
 
-      # 4️⃣ Instalar deps
+      # 4️⃣ Instalar dependências
       - name: Install dependencies
         run: npm install
 
-      # 5️⃣ Build do Tauri
+      # 5️⃣ Build usando npx
       - name: Build Tauri App
-        run: npm run tauri build
+        run: npx tauri build
 
-      # 6️⃣ Assinar binário
-      - name: Sign app for Tauri Updater
+      # 6️⃣ Encontrar binário gerado
+      - name: Find binary
+        id: find_bin
+        shell: bash
         run: |
-          FILE_PATH=$(find src-tauri/target/release/bundle -type f \( -name "*.exe" -o -name "*.AppImage" -o -name "*.dmg" \) | head -n 1)
-          SIGNATURE=$(npx tauri signer sign --private-key "${{ secrets.TAURI_PRIVATE_KEY }}" --ci --file "$FILE_PATH")
-          echo "SIGNATURE=$SIGNATURE" >> $GITHUB_ENV
-          echo "FILE_PATH=$FILE_PATH" >> $GITHUB_ENV
+          FILE_PATH=$(find src-tauri/target/release/bundle -type f -name "*.${{ matrix.ext }}" | head -n 1)
+          echo "file=$FILE_PATH" >> $GITHUB_OUTPUT
 
-      # 7️⃣ Criar latest.json
+      # 7️⃣ Assinar
+      - name: Sign app
+        id: sign_app
+        run: |
+          SIGNATURE=$(npx tauri signer sign --private-key "${{ secrets.TAURI_PRIVATE_KEY }}" --ci --file "${{ steps.find_bin.outputs.file }}")
+          echo "signature=$SIGNATURE" >> $GITHUB_OUTPUT
+
+      # 8️⃣ Upload artefatos (para juntar depois no Linux)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.platform }}
+          path: |
+            ${{ steps.find_bin.outputs.file }}
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signature-${{ matrix.platform }}
+          path: signature.txt
+        run: echo "${{ steps.sign_app.outputs.signature }}" > signature.txt
+
+  # Job para criar release e latest.json
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      # Baixar todos os binários
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      # Criar latest.json com todas plataformas
       - name: Create latest.json
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
           DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          cat > latest.json <<JSON
-          {
-            "version": "${VERSION}",
-            "notes": "Nova versão do Shindo Launcher.",
-            "pub_date": "${DATE}",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "${SIGNATURE}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/${VERSION}/$(basename "$FILE_PATH")"
-              }
-            }
-          }
-          JSON
 
-      # 8️⃣ Upload para release
+          echo "{" > latest.json
+          echo "  \"version\": \"${VERSION}\"," >> latest.json
+          echo "  \"notes\": \"Nova versão do Shindo Launcher.\"," >> latest.json
+          echo "  \"pub_date\": \"${DATE}\"," >> latest.json
+          echo "  \"platforms\": {" >> latest.json
+
+          for platform in linux-x86_64 windows-x86_64 darwin-x86_64; do
+            FILE=$(find dist/build-$platform -type f)
+            SIG=$(cat dist/signature-$platform/signature.txt)
+            echo "    \"$platform\": {\"signature\": \"$SIG\", \"url\": \"https://github.com/${{ github.repository }}/releases/download/${VERSION}/$(basename "$FILE")\"}," >> latest.json
+          done
+
+          sed -i '$ s/,$//' latest.json
+          echo "  }" >> latest.json
+          echo "}" >> latest.json
+
+      # Criar release
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ env.FILE_PATH }}
+            dist/build-*/**
             latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
