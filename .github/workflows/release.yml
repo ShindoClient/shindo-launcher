@@ -24,7 +24,6 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # Dependências extras no Linux
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -38,8 +37,8 @@ jobs:
           fi
           sudo apt-get install -y \
             build-essential curl wget file pkg-config libssl-dev \
-            libgtk-3-dev libglib2.0-dev librsvg2-dev patchelf
-          sudo apt-get install -y libayatana-appindicator3-dev || sudo apt-get install -y libappindicator3-dev
+            libgtk-3-dev libglib2.0-dev librsvg2-dev patchelf \
+            libayatana-appindicator3-dev || sudo apt-get install -y libappindicator3-dev
 
       - name: Prepare dependencies
         run: |
@@ -51,7 +50,7 @@ jobs:
       - name: Build Tauri
         run: npx --yes --package @tauri-apps/cli@latest tauri build
 
-      - name: Upload artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-artifacts
@@ -66,23 +65,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Instalar CLI do GitHub para baixar artefatos
       - name: Install GitHub CLI
         run: sudo apt-get update && sudo apt-get install -y gh jq
 
-      # Baixar todos os artefatos dos jobs anteriores
-      - name: Download artifacts from all OS builds
+      - name: Download all build artifacts
         run: |
           mkdir artifacts
           for OS in ubuntu-latest windows-latest macos-latest; do
-            gh run list --workflow=Release --branch="${GITHUB_REF_NAME}" --json databaseId --limit 1 | jq -r '.[0].databaseId' | while read run_id; do
-              gh run download "$run_id" --name "${OS}-artifacts" --dir artifacts
-            done
+            RUN_ID=$(gh run list --workflow=Release --json databaseId --limit 1 | jq -r '.[0].databaseId')
+            gh run download "$RUN_ID" --name "${OS}-artifacts" --dir artifacts
           done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Gerar latest.json
       - name: Generate latest.json
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
@@ -120,11 +115,11 @@ jobs:
           echo "  }" >> latest.json
           echo "}" >> latest.json
 
-      - name: Upload release assets
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/**/* 
+            artifacts/**/*
             latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
