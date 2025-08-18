@@ -22,25 +22,37 @@ npm run tauri:build
 ## Estrutura
 ```
 .
-├─ index.html
 ├─ package.json
+├─ tailwind.config.js
 ├─ tsconfig.json
 ├─ vite.config.ts
 ├─ src/
-│  ├─ main.tsx
-│  ├─ App.tsx
+│  ├─ main.ts
+│  ├─ App.svelte
 │  ├─ pages/
-│  │  ├─ UpdateScreen.tsx
-│  │  ├─ HomeScreen.tsx
-│  │  └─ SettingsScreen.tsx
+│  │  ├─ UpdateScreen.svelte
+│  │  ├─ HomeScreen.svelte
+│  │  └─ SettingsScreen.svelte
 │  ├─ components/
-│  │  └─ Progress.tsx
+│  │  └─ Progress.svelte
 │  └─ styles.css
 └─ src-tauri/
    ├─ Cargo.toml
    ├─ tauri.conf.json
    └─ src/
       └─ main.rs
+      └─ error.rs
+      └─ config/
+         └─ mod.rs
+         └─ settings.rs
+         └─ updater.rs
+      └─ minecraft/
+         └─ mod.rs
+         └─ java.rs
+         └─ mojang.rs
+         └─ launcher.rs
+         └─ version.rs
+
 ```
 
 ## Releases para o updater
