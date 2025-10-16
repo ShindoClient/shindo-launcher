@@ -1,84 +1,54 @@
-name: Build
+name: Release
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
-  build-tauri:
-    permissions:
-      contents: write
+  build:
+    runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
-        include:
-          - platform: macos-latest
-            args: >-
-              --target aarch64-apple-darwin
-          - platform: macos-latest
-            args: >-
-              --target x86_64-apple-darwin
-          - platform: ubuntu-22.04
-            args: >-
-
-          - platform: windows-latest
-            args: >-
-    
-
-    runs-on: ${{ matrix.platform }}
+        os: [windows-latest, ubuntu-latest, macos-latest]
     steps:
-      - name: Checkout repository and submodules
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          submodules: recursive
-
-      - name: setup node
-        uses: actions/setup-node@v4
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
         with:
-          node-version: 21
-
-      - name: install Rust nightly
+          node-version: 20
+          cache: 'pnpm'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+      - name: Build App
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri:build
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
         with:
-          targets: >-
-            ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          name: dist-${{ matrix.os }}
+          path: |
+            src-tauri/target/**/bundle/**
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libx11-dev xorg-dev libglu1-mesa-dev libglib2.0-0
-
-      - name: Setup Cargo dependency cache
-        uses: Swatinem/rust-cache@v2
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          shared-key: shared
-
-      - name: install app dependencies and build it
-        run: |
-          yarn && yarn build
-
-      - name: Build and release
-        uses: tauri-apps/tauri-action@v0
+          path: dist
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/**/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        with:
-          args: >-
-            ${{ matrix.args }}
-          tagName: >-
-            ${{ startsWith(github.event.head_commit.message, 'release: ') && 'v__VERSION__' || format('v__VERSION__-{0}', github.sha) }}
-          releaseName: >-
-            ${{ startsWith(github.event.head_commit.message, 'release: ') && 'Release v__VERSION__' || format('Development build - {0}', github.sha) }}
-          releaseBody: >-
-            ${{ startsWith(github.event.head_commit.message, 'release: ') && 'See the assets to download and install this version.' || format('Development build from commit {0}
-
-            This is an automated build from the latest commit. It may be unstable.
-
-            Commit message: {1}', github.sha, github.event.head_commit.message) }}
-          releaseDraft: >-
-            ${{ startsWith(github.event.head_commit.message, 'release: ') }}
-          prerelease: >-
-            ${{ !startsWith(github.event.head_commit.message, 'release: ') }}

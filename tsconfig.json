@@ -1,23 +1,16 @@
 {
-  "extends": "@tsconfig/svelte/tsconfig.json",
   "compilerOptions": {
     "target": "ES2020",
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "strict": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
     "useDefineForClassFields": true,
-    "allowSyntheticDefaultImports": true,
-    "noEmit": true,
-    "types": ["svelte", "vite/client", "@tauri-apps/api"],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    }
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "lib": ["ES2020", "DOM"],
+    "types": ["node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/types/**/*.d.ts", "src/**/*.svelte"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src", "vite.config.ts"]
 }

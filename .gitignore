@@ -1,56 +1,14 @@
-# Dependências
-node_modules/
-.pnp
-.pnp.js
-
-/.tauri
-
-# Saída do build front-end
-dist/
-dist-ssr/
-*.local
-
-# Logs
+﻿# Node
+node_modules
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# Sistema operacional
 .DS_Store
-Thumbs.db
-
-# Editor/IDE
-.vscode/
-.idea/
-*.swp
+/dist
 
 # Tauri
-src-tauri/target/
-src-tauri/Cargo.lock
-**/*.sig
-**/*.app
-**/*.dmg
-**/*.AppImage
-**/*.deb
-**/*.rpm
-**/*.msi
-**/*.exe
+/src-tauri/target
+/src-tauri/.cargo
+/src-tauri/tauri-build
 
-# Arquivos temporários do Rust
-target/
-Cargo.lock
-
-# Chaves privadas do updater
-.tauri/tauri-private-key.pem
-
-# Ambiente
-.env
-.env.*
-!.env.example
-
-# Outros arquivos sensíveis
-*.pem
-*.crt
-*.key
+# IDE
+.vscode
+.idea

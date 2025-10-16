@@ -1,90 +1,42 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
   "productName": "Shindo Launcher",
-  "version": "1.5.0",
+  "version": "0.1.0",
   "identifier": "com.shindo.launcher",
-  "build": {
-    "beforeBuildCommand": "npm run build",
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:5173",
-    "frontendDist": "../dist"
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://gist.githubusercontent.com/placeholder/launcher-updates.json"
+      ],
+      "dialog": true,
+      "pubkey": ""
+    }
   },
-  "app": {
-    "withGlobalTauri": true,
-    "windows": [
-      {
-        "title": "ShindoLauncher",
-        "label": "main",
-        "width": 1000,
-        "minWidth": 1000,
-        "height": 670,
-        "minHeight": 670,
-        "resizable": true,
-        "fullscreen": false,
-        "transparent": true,
-        "decorations": false,
-        "center": true,
-        "windowEffects": {
-          "effects": [
-            "acrylic"
-          ]
-        },
-        "shadow": true
-      }
-    ]
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "./dist"
   },
   "bundle": {
     "active": true,
-    "category": "Game",
-    "copyright": "ShindoLauncher",
-    "publisher": "MikiDevAHM",
-    "icon": [
-      "icons/icon.ico",
-      "icons/icon_256x256.png",
-      "icons/icon_128x128.png",
-      "icons/icon_64x64.png",
-      "icons/icon_32x32.png",
-      "icons/icon_24x24.png",
-      "icons/icon_16x16.png"
-    ],
-    "shortDescription": "A ShindoClient launcher for Minecraft",
-    "longDescription": "A ShindoClient launcher for the game Minecraft",
-    "license": "GPL-3.0",
-    "licenseFile": "../LICENSE",
-    "resources": [],
     "targets": "all",
-    "createUpdaterArtifacts": "v1Compatible",
+    "createUpdaterArtifacts": true,
     "windows": {
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": "",
-      "webviewInstallMode": {
-        "type": "embedBootstrapper"
+      "wix": {
+        "language": "pt-BR"
       }
-    },
-    "linux": {
-      "appimage": {
-        "bundleMediaFramework": true
-      }
-    },
-    "macOS": {
-      "entitlements": null,
-      "exceptionDomain": "",
-      "frameworks": [],
-      "providerShortName": null,
-      "signingIdentity": null
     }
   },
-  
-  "plugins": {
-    "process": {},
-    "shell": {},
-    "updater": {
-      "active": true,
-      "dialog": true,
-      "endpoints": [
-        "https://github.com/ShindoClient/Shindo-Launcher/releases/latest/download/latest.json"
-      ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIwQTI4QjkxNDI0M0E1QzEKUldUQnBVTkNrWXVpc0xzNERKb2oyeXFYU1pyWFdaY1N5UDZEelJEVHM1Q0VYWFZxUkh3Y1hocjkK"
-    }
+  "app": {
+    "windows": [
+      {
+        "title": "Shindo Launcher",
+        "width": 1100,
+        "height": 680,
+        "resizable": true,
+        "decorations": true
+      }
+    ]
   }
 }

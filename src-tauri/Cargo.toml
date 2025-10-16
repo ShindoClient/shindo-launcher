@@ -1,35 +1,45 @@
 [package]
 name = "shindo-launcher"
-version = "1.5.0"
-description = "Shindo Minecraft Launcher built with Tauri + Svelte"
-authors = ["MikiDevAHM"]
-license = "GPL-3.0"
-repository = "https://github.com/ShindoClient/Shindo-Launcher"
+version = "0.1.0"
 edition = "2021"
-rust-version = "1.70"
 
 [build-dependencies]
-tauri-build = { version = "^2", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# UI library
-tauri = { version = "^2", features = [] }
-tauri-plugin-process = "^2"
-tauri-plugin-dialog = "^2"
-tauri-plugin-opener = "^2"
-tauri-plugin-updater = "^2"
-
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
-tokio = { version = "1", features = ["full"] }
-anyhow = "1.0"
-dirs = "5.0"
-log = "0.4"
-env_logger = "0.11"
-zip = "0.6"
-flate2 = "1.0"
+tauri = { version = "2", features = ["wry", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
 thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "sync", "time", "process"] }
+bytes = "1"
+flate2 = "1"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+sha1 = "0.10"
+sha2 = "0.10"
+hex = "0.4"
+indicatif = "0.17"
+semver = "1"
+url = "2"
+which = "6"
+async-trait = "0.1"
+parking_lot = "0.12"
+dirs = "5"
 
-# 🔹 Biblioteca de gerenciamento do Minecraft
-rmcll = { path = "../RMCLL" }
+git2 = { version = "0.18", default-features = false, features = ["https", "vendored-openssl"] }
+
+# Tauri plugins
+tauri-plugin-updater = "2"
+
+[features]
+default = []
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

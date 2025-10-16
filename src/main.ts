@@ -1,12 +1,12 @@
-import './app.css' // aqui entra o Tailwind
-import App from './App.svelte'
-import { push } from 'svelte-spa-router'
+import { createApp } from "vue";
+import { createPinia } from "pinia";
+import App from "./App.vue";
+import router from "./router";
+import "./styles/tailwind.css";
+import { registerIcons } from "./icons";
 
-// força abrir na UpdatePage na primeira execução
-push('/update')
-
-const app = new App({
-  target: document.getElementById('app')!
-})
-
-export default app
+const app = createApp(App);
+app.use(createPinia());
+app.use(router);
+registerIcons(app);
+app.mount("#app");

@@ -1,0 +1,42 @@
+name: Setup Tauri Signing Keys
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: tauri-apps/tauri-action@v0
+        if: false
+        with:
+          args: --help
+      - name: Install Tauri CLI
+        run: npm i -g @tauri-apps/cli
+      - name: Generate keys
+        run: |
+          mkdir -p /home/runner/.tauri
+          tauri signer generate -w /home/runner/.tauri/shindo.key
+          echo "PUB=$(cat /home/runner/.tauri/shindo.key.pub | base64 -w0)" >> $GITHUB_ENV
+          echo "PRIV=$(cat /home/runner/.tauri/shindo.key | base64 -w0)" >> $GITHUB_ENV
+      - name: Store as repository secrets
+        uses: gliech/create-github-secret-action@v1
+        with:
+          name: TAURI_SIGNING_PRIVATE_KEY
+          value: ${{ env.PRIV }}
+          pa_token: ${{ secrets.GH_PAT }}
+      - name: Store optional password secret (empty)
+        uses: gliech/create-github-secret-action@v1
+        with:
+          name: TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+          value: ""
+          pa_token: ${{ secrets.GH_PAT }}
+      - name: Output public key (add to tauri.conf.json plugins.updater.pubkey)
+        run: echo $PUB | base64 -d
