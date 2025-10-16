@@ -43,3 +43,6 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 strip = true
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
