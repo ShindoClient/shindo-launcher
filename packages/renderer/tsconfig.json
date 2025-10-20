@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": false,
+    "noEmit": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["svelte", "vite/client"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.svelte"]
+}

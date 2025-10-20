@@ -1,0 +1,5 @@
+{
+  "name": "shindo-launcher-renderer",
+  "private": true,
+  "type": "module"
+}

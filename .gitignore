@@ -1,14 +1,3 @@
-﻿# Node
 node_modules
-npm-debug.log*
-.DS_Store
-/dist
-
-# Tauri
-/src-tauri/target
-/src-tauri/.cargo
-/src-tauri/tauri-build
-
-# IDE
-.vscode
-.idea
+dist/
+*.tsbuildinfo

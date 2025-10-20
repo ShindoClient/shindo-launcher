@@ -1,16 +1,9 @@
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "strict": true,
-    "jsx": "preserve",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "esModuleInterop": true,
-    "lib": ["ES2020", "DOM"],
-    "types": ["node"]
-  },
-  "include": ["src", "vite.config.ts"]
+  "files": [],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/preload" },
+    { "path": "./packages/main" },
+    { "path": "./packages/renderer" }
+  ]
 }
