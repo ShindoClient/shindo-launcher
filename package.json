@@ -2,6 +2,8 @@
   "name": "shindo-launcher",
   "private": true,
   "version": "0.1.0",
+  "description": "Shindo Launcher desktop app",
+  "author": "MikiDevAHM",
   "type": "commonjs",
   "main": "dist/main/main.js",
   "scripts": {
@@ -49,5 +51,63 @@
     "typescript": "^5.6.3",
     "vite": "^5.0.11",
     "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.shindo.launcher",
+    "productName": "Shindo Launcher",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/main/**/*",
+      "dist/preload/**/*",
+      "dist/shared/**/*",
+      "dist/renderer/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "dist/main/main.js"
+    },
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "mac": {
+      "category": "public.app-category.games",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Game"
+    }
   }
 }

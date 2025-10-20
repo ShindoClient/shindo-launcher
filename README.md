@@ -32,11 +32,23 @@ The dev script runs:
 ## Building / Packaging
 
 ```bash
-pnpm build        # builds shared + preload + main + renderer
-pnpm package      # builds and then runs electron-builder (installer generation)
+pnpm build                         # builds shared + preload + main + renderer
+pnpm package -- --win              # Windows (NSIS installer + portable zip)
+pnpm package -- --mac              # macOS (universal dmg + zip)
+pnpm package -- --linux            # Linux (AppImage + deb)
 ```
 
-Artifacts land in `dist/` (`main`, `preload`, `renderer`). `pnpm package` expects the electron-builder configuration to be extended in future phases.
+Build outputs land in `dist/` during compilation and electron-builder writes platform installers into `release/`.
+
+### CI Releases
+
+The GitHub Actions workflow `.github/workflows/release.yml` packages all three platforms when you push a tag `vX.Y.Z` (or run it manually). Artifacts uploaded per job:
+
+- **Windows**: `release/*.exe`, `release/*.zip`
+- **macOS**: `release/*.dmg`, `release/*.zip`
+- **Linux**: `release/*.AppImage`, `release/*.deb`
+
+Signing is disabled by default (`CSC_IDENTITY_AUTO_DISCOVERY=false`). Set the proper signing secrets before distributing notarised builds.
 
 ## Runtime Management
 
