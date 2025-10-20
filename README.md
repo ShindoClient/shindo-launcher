@@ -86,11 +86,3 @@ Configurations:
 - `packages/renderer/svelte.config.js` + `vite.config.ts` for Svelte/Vite
 - `package.json` scripts wire the workspace builds and dev flow
 
-## Next Steps
-
-- Harden the JRE downloader (checksums, resume support, more distributions)
-- Expand launch logging with richer phases (asset download, JVM bootstrap)
-- Wire electron-builder configuration and CI publishing (Fase 5)
-- Add tests (unit + integration) for services and store logic
-
-Enjoy hacking on Shindo Launcher!
