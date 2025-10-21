@@ -74,16 +74,71 @@ function pickAssetForPlatform(assets: GitHubAsset[]): GitHubAsset | null {
   if (!Array.isArray(assets) || assets.length === 0) {
     return null;
   }
-  const hints = PLATFORM_HINTS[process.platform] ?? [];
-  const lowerHints = hints.map((hint) => hint.toLowerCase());
 
-  const matches = assets.filter((asset) => {
-    const name = asset.name?.toLowerCase() ?? '';
-    return lowerHints.some((hint) => name.includes(hint));
-  });
+  const platform = process.platform;
 
-  if (matches.length > 0) {
-    return matches[0];
+  const scored = assets
+    .filter((asset) => Boolean(asset?.name))
+    .map((asset) => {
+      const name = (asset.name ?? '').toLowerCase();
+      let score = 0;
+
+      if (platform === 'win32') {
+        if (name === 'elevate.exe') {
+          score -= 1000;
+        }
+        if (name.endsWith('.exe')) {
+          score += 40;
+        }
+        if (name.includes('setup') || name.includes('installer')) {
+          score += 60;
+        }
+        if (name.includes('x64')) {
+          score += 5;
+        }
+        if (name.includes('arm')) {
+          score -= 10;
+        }
+      } else if (platform === 'darwin') {
+        if (name.endsWith('.dmg')) {
+          score += 60;
+        }
+        if (name.endsWith('.pkg')) {
+          score += 40;
+        }
+        if (name.includes('arm64') && process.arch !== 'arm64') {
+          score -= 20;
+        }
+      } else if (platform === 'linux') {
+        if (name.endsWith('.appimage')) {
+          score += 60;
+        }
+        if (name.endsWith('.deb')) {
+          score += 40;
+        }
+        if (name.includes('arm') && process.arch !== 'arm64') {
+          score -= 10;
+        }
+      }
+
+      const hints = PLATFORM_HINTS[platform as NodeJS.Platform] ?? [];
+      if (hints.some((hint) => name.includes(hint.toLowerCase()))) {
+        score += 10;
+      }
+
+      const size = typeof asset.size === 'number' ? asset.size : 0;
+      return { asset, score, size };
+    })
+    .sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      return b.size - a.size;
+    });
+
+  const best = scored[0];
+  if (best && (best.score > Number.NEGATIVE_INFINITY)) {
+    return best.asset;
   }
 
   return assets[0] ?? null;
