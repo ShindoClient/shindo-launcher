@@ -36,7 +36,7 @@
   $: isSettingsOpen = $appStore.screen === 'settings'
 </script>
 
-<header class="title-bar">
+<header class="title-bar" role="presentation" on:dblclick|preventDefault|stopPropagation={() => null}>
   <div class="title-left">
     <img class="logo" src={logoUrl} alt="Logotipo do Shindo Launcher" draggable="false" />
     <span class="title-text">

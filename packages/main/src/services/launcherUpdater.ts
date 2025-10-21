@@ -30,6 +30,7 @@ const PLATFORM_HINTS: Partial<Record<NodeJS.Platform, string[]>> = {
 let updaterConfigured = false;
 let lastCheckResult: UpdateCheckResult | null = null;
 let lastDownloadedPath: string | null = null;
+let lastDownloadUsedAutoUpdater = false;
 const progressListeners = new Set<(info: ProgressInfo) => void>();
 
 function getRepo(): string {
@@ -326,6 +327,7 @@ async function checkWithAutoUpdater(): Promise<LauncherUpdateInfoPayload | null>
     const result = await autoUpdater.checkForUpdates();
     if (!result || !result.updateInfo) {
       lastDownloadedPath = null;
+      lastDownloadUsedAutoUpdater = false;
       return {
         updateAvailable: false,
         currentVersion: getCurrentVersion(),
@@ -407,6 +409,7 @@ async function downloadWithAutoUpdater(): Promise<LauncherUpdateResultPayload | 
   }
 
   if (!currentInfo.updateAvailable) {
+    lastDownloadUsedAutoUpdater = false;
     return {
       updateAvailable: false,
       latestVersion: currentInfo.latestVersion ?? null,
@@ -416,33 +419,36 @@ async function downloadWithAutoUpdater(): Promise<LauncherUpdateResultPayload | 
     };
   }
 
-    const result = lastCheckResult ?? (await autoUpdater.checkForUpdates());
-    if (!result || !result.updateInfo || !result.isUpdateAvailable) {
-      lastDownloadedPath = null;
-      return {
-        updateAvailable: false,
-        latestVersion: currentInfo.latestVersion,
-        currentVersion: currentInfo.currentVersion,
-        release: currentInfo.release,
-        asset: currentInfo.asset ?? null,
-      };
-    }
+  const result = lastCheckResult ?? (await autoUpdater.checkForUpdates());
+  if (!result || !result.updateInfo || !result.isUpdateAvailable) {
+    lastDownloadedPath = null;
+    lastDownloadUsedAutoUpdater = false;
+    return {
+      updateAvailable: false,
+      latestVersion: currentInfo.latestVersion,
+      currentVersion: currentInfo.currentVersion,
+      release: currentInfo.release,
+      asset: currentInfo.asset ?? null,
+    };
+  }
 
-    try {
-      const files = await autoUpdater.downloadUpdate(result.cancellationToken);
-      const downloadedPath = files?.[0] ?? null;
-      lastDownloadedPath = downloadedPath ?? null;
-      return {
-        updateAvailable: true,
-        latestVersion: currentInfo.latestVersion,
-        currentVersion: currentInfo.currentVersion,
-        release: currentInfo.release,
-        asset: currentInfo.asset ?? null,
-        downloadedPath,
-      };
-    } catch (error) {
-      if (isIgnorableAutoUpdaterError(error)) {
-        return null;
+  try {
+    const files = await autoUpdater.downloadUpdate(result.cancellationToken);
+    const downloadedPath = files?.[0] ?? null;
+    lastDownloadedPath = downloadedPath ?? null;
+    lastDownloadUsedAutoUpdater = downloadedPath !== null;
+    return {
+      updateAvailable: true,
+      latestVersion: currentInfo.latestVersion,
+      currentVersion: currentInfo.currentVersion,
+      release: currentInfo.release,
+      asset: currentInfo.asset ?? null,
+      downloadedPath,
+    };
+  } catch (error) {
+    lastDownloadUsedAutoUpdater = false;
+    if (isIgnorableAutoUpdaterError(error)) {
+      return null;
     }
     throw error;
   }
@@ -454,6 +460,7 @@ async function downloadWithGitHubFallback(): Promise<LauncherUpdateResultPayload
 
   if (!updateAvailable || !asset) {
     lastDownloadedPath = null;
+    lastDownloadUsedAutoUpdater = false;
     return {
       updateAvailable: false,
       latestVersion,
@@ -478,6 +485,7 @@ async function downloadWithGitHubFallback(): Promise<LauncherUpdateResultPayload
 
   const downloadedPath = await downloadAssetToCache(rawAsset, latestVersion);
   lastDownloadedPath = downloadedPath;
+  lastDownloadUsedAutoUpdater = false;
   return {
     updateAvailable: true,
     latestVersion,
@@ -612,7 +620,8 @@ export async function applyLauncherUpdate(downloadedPath?: string | null): Promi
   const targetPath = downloadedPath ?? lastDownloadedPath;
 
   try {
-    if (configureAutoUpdater()) {
+    if (lastDownloadUsedAutoUpdater && configureAutoUpdater()) {
+      console.info('Applying launcher update via autoUpdater.quitAndInstall()');
       autoUpdater.quitAndInstall();
       return true;
     }
@@ -624,6 +633,11 @@ export async function applyLauncherUpdate(downloadedPath?: string | null): Promi
 
   if (targetPath) {
     try {
+      if (!fs.existsSync(targetPath)) {
+        console.error('Launcher installer not found at', targetPath);
+        return false;
+      }
+      console.info('Launching launcher installer at', targetPath);
       const result = await shell.openPath(targetPath);
       if (result && result.trim().length > 0) {
         console.error('Failed to launch installer:', result);

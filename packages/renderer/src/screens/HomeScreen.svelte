@@ -5,6 +5,7 @@
   import ChevronUp from 'lucide-svelte/icons/chevron-up'
   import { appStore } from '../store/appStore'
   import { resolveVersionPresentation } from '../config/versionCatalog'
+  import VersionBanner from '../components/VersionBanner.svelte'
 
   const { launch, applyConfigPatch } = appStore
 
@@ -76,31 +77,7 @@
     <div class="flex flex-col gap-4">
 
 
-      <div
-        class="relative flex min-h-[14.5rem] w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-lg"
-        style={`background-image: ${versionPresentation.backgroundImage}; background-size: cover; background-position: center;`}
-      >
-        <div class="absolute inset-0 bg-slate-950/65" />
-        <div class="relative z-10 flex w-full flex-col justify-center px-8 py-5">
-          <span class="text-[11px] uppercase tracking-[0.35em] text-slate-300/90">Destacado</span>
-          <div class="mt-3 flex flex-wrap items-center gap-3">
-            <h2 class="text-3xl font-bold text-slate-50">{versionPresentation.name}</h2>
-            <span
-              class="rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em]"
-              style={`border-color: ${versionPresentation.accent}; color: ${versionPresentation.accent};`}
-            >
-              Minecraft {versionPresentation.baseVersion}
-            </span>
-          </div>
-          <p class="mt-3 text-sm text-slate-200/90">{versionPresentation.headline}</p>
-          {#if versionPresentation.description}
-            <p class="mt-3 max-w-xl text-sm text-slate-300/90">{versionPresentation.description}</p>
-          {/if}
-          <p class="mt-4 text-xs uppercase tracking-[0.3em] text-slate-400">
-            Build {versionPresentation.buildLabel}
-          </p>
-        </div>
-      </div>
+      <VersionBanner presentation={versionPresentation} />
 
       <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
