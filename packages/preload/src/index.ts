@@ -55,6 +55,8 @@ const bridge: LauncherBridge = {
     ipcRenderer.invoke(IpcChannel.SystemMemory) as Promise<SystemMemoryInfo>,
   runStartupUpdate: () =>
     ipcRenderer.invoke(IpcChannel.RunStartupUpdate) as Promise<void>,
+  getVersion: () =>
+    ipcRenderer.invoke(IpcChannel.AppVersion) as Promise<string>,
   minimizeWindow: () =>
     ipcRenderer.invoke(IpcChannel.WindowMinimize) as Promise<void>,
   closeWindow: () =>

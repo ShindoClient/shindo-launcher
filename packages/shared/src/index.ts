@@ -11,6 +11,7 @@ export const enum IpcChannel {
   LaunchStart = 'shindo:launch.start',
   WindowMinimize = 'shindo:window.minimize',
   WindowClose = 'shindo:window.close',
+  AppVersion = 'shindo:app.version',
 }
 
 export const enum IpcEvent {
@@ -97,6 +98,7 @@ export interface LauncherBridge {
   runStartupUpdate(): Promise<void>;
   minimizeWindow(): Promise<void>;
   closeWindow(): Promise<void>;
+  getVersion(): Promise<string>;
   onUpdateProgress(callback: (event: UpdateProgressPayload) => void): () => void;
   onUpdateCompleted(callback: (payload: UpdateCompletionPayload) => void): () => void;
   onUpdateError(callback: (payload: UpdateErrorPayload) => void): () => void;

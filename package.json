@@ -32,6 +32,7 @@
     "lucide-svelte": "^0.329.0",
     "minecraft-launcher-core": "^3.18.2",
     "node-fetch": "^3.3.2",
+    "request": "^2.88.2",
     "semver": "^7.7.3",
     "tar": "^6.2.0"
   },
@@ -69,11 +70,26 @@
       "node_modules/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "packages/renderer/src/assets/logo.ico",
+        "to": "logo.ico"
+      },
+      {
+        "from": "packages/renderer/src/assets/logo.icns",
+        "to": "logo.icns"
+      },
+      {
+        "from": "packages/renderer/src/assets/logo.png",
+        "to": "logo.png"
+      }
+    ],
     "extraMetadata": {
       "main": "dist/main/main.js"
     },
     "asar": true,
     "win": {
+      "icon": "packages/renderer/src/assets/logo.ico",
       "target": [
         {
           "target": "nsis",
@@ -85,6 +101,7 @@
     },
     "mac": {
       "category": "public.app-category.games",
+      "icon": "packages/renderer/src/assets/logo.icns",
       "target": [
         {
           "target": "dmg",
@@ -96,6 +113,7 @@
       ]
     },
     "linux": {
+      "icon": "packages/renderer/src/assets/logo.png",
       "target": [
         {
           "target": "AppImage",
@@ -111,6 +129,14 @@
         }
       ],
       "category": "Game"
+    },
+    "nsis": {
+      "installerIcon": "packages/renderer/src/assets/logo.ico",
+      "uninstallerIcon": "packages/renderer/src/assets/logo.ico",
+      "installerHeaderIcon": "packages/renderer/src/assets/logo.ico",
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Shindo Launcher"
     }
   }
 }

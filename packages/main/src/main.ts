@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, nativeImage } from 'electron';
 import path from 'node:path';
 import { IpcChannel, IpcEvent } from '@shindo/shared';
 import { LauncherService } from './services/launcherService';
@@ -7,6 +7,29 @@ import { getSystemMemory } from './system/memory';
 import { runStartupUpdateSequence } from './services/updateOrchestrator';
 
 const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
+const ICON_MAP: Partial<Record<NodeJS.Platform, string>> = {
+  win32: 'logo.ico',
+  linux: 'logo.png',
+  darwin: 'logo.icns',
+};
+const DEFAULT_ICON_FILE = 'logo.png';
+
+function resolveAssetPath(fileName: string): string {
+  if (isDev) {
+    return path.resolve(__dirname, '../../packages/renderer/src/assets', fileName);
+  }
+  return path.join(process.resourcesPath, fileName);
+}
+
+function resolveIconPath(): string {
+  const iconFile = ICON_MAP[process.platform as NodeJS.Platform] ?? DEFAULT_ICON_FILE;
+  return resolveAssetPath(iconFile);
+}
+
+function createWindowIcon() {
+  const icon = nativeImage.createFromPath(resolveIconPath());
+  return icon.isEmpty() ? undefined : icon;
+}
 
 let mainWindow: BrowserWindow | null = null;
 const launcherService = new LauncherService();
@@ -28,6 +51,7 @@ async function createWindow(): Promise<void> {
     show: false,
     frame: false,
     backgroundColor: '#0f172a',
+    icon: createWindowIcon(),
     titleBarStyle: process.platform === 'darwin' ? 'hidden' : undefined,
     trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 16 } : undefined,
     webPreferences: {
@@ -40,6 +64,13 @@ async function createWindow(): Promise<void> {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show();
+
+    if (process.platform === 'darwin') {
+      const dockIcon = nativeImage.createFromPath(resolveAssetPath('logo.png'));
+      if (!dockIcon.isEmpty() && app.dock) {
+        app.dock.setIcon(dockIcon);
+      }
+    }
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -93,6 +124,8 @@ ipcMain.handle(IpcChannel.SystemMemory, () => getSystemMemory());
 ipcMain.handle(IpcChannel.RunStartupUpdate, async () => {
   await runStartupUpdateSequence(launcherService);
 });
+
+ipcMain.handle(IpcChannel.AppVersion, () => app.getVersion());
 
 ipcMain.handle(IpcChannel.WindowMinimize, () => {
   mainWindow?.minimize();

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import Minus from 'lucide-svelte/icons/minus'
   import X from 'lucide-svelte/icons/x'
   import Settings from 'lucide-svelte/icons/settings'
@@ -7,6 +8,7 @@
 
   const TITLE = 'Shindo Launcher'
   const { setScreen } = appStore
+  let versionLabel: string | null = null
 
   function minimize() {
     window.shindo.minimizeWindow().catch((error) => console.error('Failed to minimize window', error))
@@ -22,13 +24,27 @@
     setScreen(currentScreen === 'settings' ? 'home' : 'settings')
   }
 
+  onMount(() => {
+    window.shindo
+      .getVersion()
+      .then((value) => {
+        versionLabel = value.trim() ? value : null
+      })
+      .catch((error) => console.error('Failed to fetch launcher version', error))
+  })
+
   $: isSettingsOpen = $appStore.screen === 'settings'
 </script>
 
 <header class="title-bar">
   <div class="title-left">
     <img class="logo" src={logoUrl} alt="Logotipo do Shindo Launcher" draggable="false" />
-    <span class="title-text">{TITLE}</span>
+    <span class="title-text">
+      {TITLE}
+      {#if versionLabel}
+        <span class="title-version">v{versionLabel}</span>
+      {/if}
+    </span>
   </div>
   <div class="title-controls" role="group" aria-label="Controles da janela">
     <button
@@ -93,6 +109,8 @@
   }
 
   .title-text {
+    display: inline-flex;
+    align-items: baseline;
     font-size: 0.95rem;
     font-weight: 600;
     letter-spacing: 0.06em;
@@ -101,6 +119,15 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .title-version {
+    margin-left: 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+    color: rgba(148, 163, 184, 0.95);
   }
 
   .title-controls {
