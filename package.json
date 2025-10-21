@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "description": "Shindo Launcher desktop app",
-  "author": "MikiDevAHM",
+  "author": {
+    "name": "MikiDevAHM",
+    "email": "launcher@shindo.gg"
+  },
   "type": "commonjs",
   "main": "dist/main/main.js",
   "scripts": {
