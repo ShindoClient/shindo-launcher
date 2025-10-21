@@ -68,6 +68,8 @@ const store = writable<AppState>(initialState)
 let listenersRegistered = false
 const unsubscribers: Array<() => void> = []
 
+console.log('[renderer] bridge available:', typeof window.shindo !== 'undefined')
+
 function pushClientLog(
   logs: string[],
   level: 'INFO' | 'WARN' | 'ERROR',

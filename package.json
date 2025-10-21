@@ -1,7 +1,7 @@
 {
   "name": "shindo-launcher",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shindo Launcher desktop app",
   "author": {
     "name": "MikiDevAHM",
@@ -28,11 +28,9 @@
   },
   "dependencies": {
     "@shindo/shared": "workspace:*",
-    "adm-zip": "^0.5.16",
     "lucide-svelte": "^0.329.0",
     "minecraft-launcher-core": "^3.18.2",
     "node-fetch": "^3.3.2",
-    "request": "^2.88.2",
     "semver": "^7.7.3",
     "tar": "^6.2.0"
   },

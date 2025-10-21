@@ -5,6 +5,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 export default defineConfig({
   root: __dirname,
   plugins: [svelte()],
+  base: './',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

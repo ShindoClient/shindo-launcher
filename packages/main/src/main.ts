@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { app, BrowserWindow, ipcMain, shell, nativeImage } from 'electron';
 import path from 'node:path';
 import { IpcChannel, IpcEvent } from '@shindo/shared';
@@ -13,6 +14,47 @@ const ICON_MAP: Partial<Record<NodeJS.Platform, string>> = {
   darwin: 'logo.icns',
 };
 const DEFAULT_ICON_FILE = 'logo.png';
+
+type LogLevel = 'info' | 'error' | 'warn';
+
+let logFilePath: string | null = null;
+const pendingLogs: string[] = [];
+
+function persistLog(line: string): void {
+  if (!logFilePath) {
+    pendingLogs.push(line);
+    return;
+  }
+  try {
+    fs.appendFileSync(logFilePath, line);
+  } catch {
+    pendingLogs.push(line);
+  }
+}
+
+function flushPendingLogs(): void {
+  if (!logFilePath || pendingLogs.length === 0) {
+    return;
+  }
+  try {
+    fs.appendFileSync(logFilePath, pendingLogs.join(''));
+    pendingLogs.length = 0;
+  } catch {
+    // keep pending
+  }
+}
+
+function logMessage(level: LogLevel, message: string): void {
+  const line = `[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}\n`;
+  persistLog(line);
+  if (level === 'error') {
+    console.error(message);
+  } else if (level === 'warn') {
+    console.warn(message);
+  } else {
+    console.log(message);
+  }
+}
 
 function resolveAssetPath(fileName: string): string {
   if (isDev) {
@@ -85,9 +127,73 @@ async function createWindow(): Promise<void> {
     const rendererPath = path.join(__dirname, '../renderer/index.html');
     await mainWindow.loadFile(rendererPath);
   }
+
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    logMessage('error', `Renderer failed to load (${errorCode}): ${errorDescription} -> ${validatedURL}`);
+  });
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const mappedLevel: LogLevel = level === 2 ? 'error' : level === 1 ? 'warn' : 'info';
+    logMessage(mappedLevel, `[renderer:${level}] ${message} (${sourceId}:${line})`);
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    logMessage('error', `Renderer process gone: ${details.reason}`);
+  });
+
+  mainWindow.webContents.on('dom-ready', () => {
+    logMessage('info', 'Renderer dom-ready event fired');
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.webContents.executeJavaScript('typeof window.shindo')
+      .then((value) => {
+        logMessage('info', `Renderer window.shindo typeof: ${value}`);
+      })
+      .catch((error) => {
+        logMessage('error', `Failed to read window.shindo typeof: ${error instanceof Error ? error.message : String(error)}`);
+      });
+
+    mainWindow?.webContents.executeJavaScript('document.body.innerHTML')
+      .then((html) => {
+        const snapshot = String(html).replace(/\s+/g, ' ').trim().slice(0, 200);
+        logMessage('info', `Renderer body snapshot: ${snapshot}`);
+      })
+      .catch((error) => {
+        logMessage('error', `Failed to snapshot renderer DOM: ${error instanceof Error ? error.message : String(error)}`);
+      });
+  });
+
+  setTimeout(() => {
+    mainWindow?.webContents.executeJavaScript('typeof window.shindo')
+      .then((value) => {
+        logMessage('info', `[delay] window.shindo typeof: ${value}`);
+      })
+      .catch((error) => {
+        logMessage('error', `[delay] Failed to read window.shindo typeof: ${error instanceof Error ? error.message : String(error)}`);
+      });
+
+    mainWindow?.webContents.executeJavaScript('document.body.innerHTML')
+      .then((html) => {
+        const snapshot = String(html).replace(/\s+/g, ' ').trim().slice(0, 200);
+        logMessage('info', `[delay] body snapshot: ${snapshot}`);
+      })
+      .catch((error) => {
+        logMessage('error', `[delay] Failed to snapshot renderer DOM: ${error instanceof Error ? error.message : String(error)}`);
+      });
+  }, 5000);
 }
 
 app.whenReady().then(async () => {
+  try {
+    logFilePath = path.join(app.getPath('userData'), 'launcher.log');
+    fs.mkdirSync(path.dirname(logFilePath), { recursive: true });
+    fs.writeFileSync(logFilePath, '', { flag: 'a' });
+    flushPendingLogs();
+  } catch (error) {
+    console.error('Failed to initialise log file', error);
+  }
+
   await createWindow();
 
   app.on('activate', async () => {
