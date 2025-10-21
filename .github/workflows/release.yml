@@ -36,8 +36,8 @@ jobs:
         with:
           name: shindo-launcher-windows
           path: |
-            dist/**/*.exe
-            dist/**/*.zip
+            release/**/*.exe
+            release/**/*.zip
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -45,8 +45,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/**/*.exe
-            dist/**/*.zip
+            release/**/*.exe
+            release/**/*.zip
           generate_release_notes: true
           draft: false
           prerelease: false
