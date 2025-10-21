@@ -14,7 +14,7 @@ import type {
   MemoryOptions,
 } from '@shindo/shared';
 import { ensureClientUpToDate, getLocalClientState, type EnsureClientOptions } from './clientManager';
-import { checkLauncherUpdate, ensureLauncherUpdate } from './launcherUpdater';
+import { checkLauncherUpdate, ensureLauncherUpdate, applyLauncherUpdate } from './launcherUpdater';
 import { getBaseDataDir, getVersionsDir } from '../utils/pathResolver';
 import { loadConfig } from './configService';
 import { downloadAsset } from './githubClient';
@@ -113,6 +113,10 @@ export class LauncherService {
 
   async downloadLauncherUpdate(): Promise<LauncherUpdateResultPayload> {
     return ensureLauncherUpdate();
+  }
+
+  async applyLauncherUpdate(downloadedPath?: string | null): Promise<boolean> {
+    return applyLauncherUpdate(downloadedPath);
   }
 
   async launchClient(

@@ -5,7 +5,7 @@
   "description": "Shindo Launcher desktop app",
   "author": {
     "name": "MikiDevAHM",
-    "email": "launcher@shindo.gg"
+    "email": "contato_miki@mittelsdorf.me"
   },
   "type": "commonjs",
   "main": "dist/main/main.js",
@@ -28,6 +28,11 @@
   },
   "dependencies": {
     "@shindo/shared": "workspace:*",
+    "electron-context-menu": "^4.1.1",
+    "electron-reloader": "^1.2.3",
+    "electron-serve": "^3.0.0",
+    "electron-updater": "^6.3.9",
+    "electron-window-state": "^5.0.3",
     "lucide-svelte": "^0.329.0",
     "minecraft-launcher-core": "^3.18.2",
     "node-fetch": "^3.3.2",
@@ -35,6 +40,9 @@
     "tar": "^6.2.0"
   },
   "devDependencies": {
+    "@electron/packager": "^19.0.1",
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.47.2",
     "@sveltejs/vite-plugin-svelte": "^3.1.1",
     "@types/adm-zip": "^0.5.7",
     "@types/node": "^22.10.1",
@@ -45,10 +53,12 @@
     "cross-env": "^7.0.3",
     "electron": "^29.3.0",
     "electron-builder": "^24.9.1",
+    "electron-connect": "^0.6.3",
     "postcss": "^8.4.32",
     "rimraf": "^5.0.5",
     "svelte": "^4.2.18",
     "svelte-check": "^3.8.5",
+    "svelte-preprocess": "^6.0.3",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.6.3",
     "vite": "^5.0.11",

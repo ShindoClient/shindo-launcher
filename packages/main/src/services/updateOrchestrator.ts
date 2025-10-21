@@ -1,8 +1,9 @@
 import { BrowserWindow } from 'electron';
-import { IpcEvent, type UpdateStep, type ClientUpdatePayload, type LauncherUpdateInfoPayload } from '@shindo/shared';
+import { IpcEvent, type UpdateStep, type ClientUpdatePayload, type LauncherUpdateInfoPayload, type LauncherUpdateResultPayload } from '@shindo/shared';
 import type { LauncherService } from './launcherService';
 import { loadConfig, updateConfig } from './configService';
 import { ensureJre, type EnsureJreResult } from './jreManager';
+import { onLauncherDownloadProgress } from './launcherUpdater';
 
 let isRunning = false;
 
@@ -26,7 +27,8 @@ interface PhaseDescriptor {
   step: UpdateStep;
   message: string | (() => string);
   percent: number;
-  action?: () => Promise<void>;
+  action?: () => Promise<void | boolean>;
+  trackDownloadProgress?: boolean;
 }
 
 export async function runStartupUpdateSequence(service: LauncherService): Promise<void> {
@@ -37,6 +39,7 @@ export async function runStartupUpdateSequence(service: LauncherService): Promis
     const launcherInfo: LauncherUpdateInfoPayload = await service.checkLauncherUpdate();
     let jreResult: EnsureJreResult | null = null;
     let clientState: ClientUpdatePayload | null = null;
+    let launcherDownloadResult: LauncherUpdateResultPayload | null = null;
 
     const phases: PhaseDescriptor[] = [
       {
@@ -51,8 +54,24 @@ export async function runStartupUpdateSequence(service: LauncherService): Promis
         step: 'launcher-update',
         message: 'Baixando atualizacao do launcher...',
         percent: 55,
+        trackDownloadProgress: true,
         action: async () => {
-          await service.downloadLauncherUpdate();
+          launcherDownloadResult = await service.downloadLauncherUpdate();
+        },
+      });
+      phases.push({
+        step: 'launcher-update',
+        message: 'Aplicando atualizacao do launcher...',
+        percent: 90,
+        action: async () => {
+          if (launcherDownloadResult?.updateAvailable) {
+            const applied = await service.applyLauncherUpdate(launcherDownloadResult.downloadedPath ?? null);
+            if (applied) {
+              emit(IpcEvent.UpdateCompleted, { success: true });
+              return true;
+            }
+          }
+          return false;
         },
       });
       phases.push({
@@ -112,10 +131,33 @@ export async function runStartupUpdateSequence(service: LauncherService): Promis
     const total = phases.length;
     for (let index = 0; index < phases.length; index += 1) {
       const phase = phases[index];
-      const message = typeof phase.message === 'function' ? phase.message() : phase.message;
-      emitProgress(phase.step, message, phase.percent, index + 1, total);
-      if (phase.action) {
-        await phase.action();
+      const baseMessage = typeof phase.message === 'function' ? phase.message() : phase.message;
+      emitProgress(phase.step, baseMessage, phase.percent, index + 1, total);
+
+      let unsubscribe: (() => void) | null = null;
+      if (phase.trackDownloadProgress) {
+        unsubscribe = onLauncherDownloadProgress((progress) => {
+          const percentValue =
+            typeof progress.percent === 'number'
+              ? Math.max(0, Math.min(phase.percent, Math.round((progress.percent / 100) * phase.percent)))
+              : phase.percent;
+          const messageWithPercent =
+            typeof progress.percent === 'number'
+              ? `${baseMessage} (${Math.round(progress.percent)}%)`
+              : baseMessage;
+          emitProgress(phase.step, messageWithPercent, percentValue, index + 1, total);
+        });
+      }
+
+      try {
+        if (phase.action) {
+          const shouldStop = await phase.action();
+          if (shouldStop === true) {
+            return;
+          }
+        }
+      } finally {
+        unsubscribe?.();
       }
     }
 
