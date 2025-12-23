@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ResolvedVersionPresentation } from '../config/versionCatalog'
+  import { t } from '../i18n'
 
   export let presentation: ResolvedVersionPresentation
 </script>
@@ -10,7 +11,7 @@
 >
   <div class="version-banner__overlay" />
   <div class="version-banner__content">
-    <span class="version-banner__tag">Destacado</span>
+    <span class="version-banner__tag">{$t('versionBanner.featured')}</span>
     <div class="version-banner__heading">
       <h2 class="version-banner__title">{presentation.name}</h2>
       <span
@@ -24,7 +25,7 @@
     {#if presentation.description}
       <p class="version-banner__description">{presentation.description}</p>
     {/if}
-    <p class="version-banner__build">Build {presentation.buildLabel}</p>
+    <p class="version-banner__build">{$t('versionBanner.build')} {presentation.buildLabel}</p>
   </div>
 </div>
 

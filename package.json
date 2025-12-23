@@ -1,7 +1,7 @@
 {
   "name": "shindo-launcher",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Shindo Launcher desktop app",
   "author": {
     "name": "MikiDevAHM",
@@ -10,9 +10,9 @@
   "type": "commonjs",
   "main": "dist/main/main.js",
   "scripts": {
-    "dev": "concurrently \"pnpm:dev:renderer\" \"pnpm:watch:shared\" \"pnpm:watch:preload\" \"pnpm:watch:main\" \"pnpm:dev:electron\"",
+    "dev": "node scripts/dev.js",
     "dev:renderer": "cd packages/renderer && vite",
-    "dev:electron": "wait-on tcp:5173 dist/main/main.js dist/preload/index.js dist/shared/index.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+    "dev:electron": "node scripts/dev-electron.js",
     "watch:main": "tsc -p packages/main/tsconfig.json --watch",
     "watch:preload": "tsc -p packages/preload/tsconfig.json --watch",
     "watch:shared": "tsc -p packages/shared/tsconfig.json --watch",

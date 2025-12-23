@@ -15,6 +15,10 @@ import type {
   UpdateProgressPayload,
   LaunchLogPayload,
   LaunchExitPayload,
+  AccountsStatePayload,
+  OfflineAccountRequestPayload,
+  AccountSelectionPayload,
+  LaunchLogEntry,
 } from '@shindo/shared';
 
 type EventPayload<T extends IpcEvent> =
@@ -57,6 +61,24 @@ const bridge: LauncherBridge = {
     ipcRenderer.invoke(IpcChannel.RunStartupUpdate) as Promise<void>,
   getVersion: () =>
     ipcRenderer.invoke(IpcChannel.AppVersion) as Promise<string>,
+  getLaunchLogs: () =>
+    ipcRenderer.invoke(IpcChannel.LaunchLogHistory) as Promise<LaunchLogEntry[]>,
+  clearLaunchLogs: () =>
+    ipcRenderer.invoke(IpcChannel.LaunchLogClear) as Promise<void>,
+  openLogWindow: () =>
+    ipcRenderer.invoke(IpcChannel.LogWindowOpen) as Promise<void>,
+  closeLogWindow: () =>
+    ipcRenderer.invoke(IpcChannel.LogWindowClose) as Promise<void>,
+  getAccounts: () =>
+    ipcRenderer.invoke(IpcChannel.AccountsList) as Promise<AccountsStatePayload>,
+  addOfflineAccount: (payload: OfflineAccountRequestPayload) =>
+    ipcRenderer.invoke(IpcChannel.AccountsAddOffline, payload) as Promise<AccountsStatePayload>,
+  addMicrosoftAccount: () =>
+    ipcRenderer.invoke(IpcChannel.AccountsAddMicrosoft) as Promise<AccountsStatePayload>,
+  removeAccount: (payload: AccountSelectionPayload) =>
+    ipcRenderer.invoke(IpcChannel.AccountsRemove, payload) as Promise<AccountsStatePayload>,
+  selectAccount: (payload: AccountSelectionPayload) =>
+    ipcRenderer.invoke(IpcChannel.AccountsSelect, payload) as Promise<AccountsStatePayload>,
   minimizeWindow: () =>
     ipcRenderer.invoke(IpcChannel.WindowMinimize) as Promise<void>,
   closeWindow: () =>

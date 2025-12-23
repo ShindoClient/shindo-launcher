@@ -5,6 +5,7 @@
   import Settings from 'lucide-svelte/icons/settings'
   import logoUrl from '../assets/logo.png'
   import { appStore } from '../store/appStore'
+  import { t } from '../i18n'
 
   const TITLE = 'Shindo Launcher'
   const { setScreen } = appStore
@@ -46,12 +47,12 @@
       {/if}
     </span>
   </div>
-  <div class="title-controls" role="group" aria-label="Controles da janela">
+  <div class="title-controls" role="group" aria-label={$t('titleBar.controls')}>
     <button
       type="button"
       class={`control-button settings ${isSettingsOpen ? 'active' : ''}`}
-      title={isSettingsOpen ? 'Voltar' : 'Configurações'}
-      aria-label="Abrir configuracoes"
+      title={isSettingsOpen ? $t('titleBar.settingsBack') : $t('titleBar.settingsOpen')}
+      aria-label={$t('titleBar.settingsAria')}
       aria-pressed={isSettingsOpen}
       on:click|stopPropagation={toggleSettings}
     >
@@ -60,8 +61,8 @@
     <button
       type="button"
       class="control-button"
-      title="Minimizar"
-      aria-label="Minimizar"
+      title={$t('titleBar.minimize')}
+      aria-label={$t('titleBar.minimize')}
       on:click|stopPropagation={minimize}
     >
       <Minus class="icon" aria-hidden="true" />
@@ -69,8 +70,8 @@
     <button
       type="button"
       class="control-button close"
-      title="Fechar"
-      aria-label="Fechar"
+      title={$t('titleBar.close')}
+      aria-label={$t('titleBar.close')}
       on:click|stopPropagation={close}
     >
       <X class="icon" aria-hidden="true" />

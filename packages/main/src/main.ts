@@ -1,11 +1,13 @@
 import fs from 'node:fs';
 import { app, BrowserWindow, ipcMain, shell, nativeImage } from 'electron';
 import path from 'node:path';
-import { IpcChannel, IpcEvent } from '@shindo/shared';
+import { IpcChannel, IpcEvent, type LaunchLogEntry, type LaunchLogLevel, type LauncherConfig } from '@shindo/shared';
 import { LauncherService } from './services/launcherService';
 import { loadConfig, updateConfig } from './services/configService';
 import { getSystemMemory } from './system/memory';
 import { runStartupUpdateSequence } from './services/updateOrchestrator';
+import { accountService } from './services/accountService';
+import { ensureJre } from './services/jreManager';
 
 const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
 const ICON_MAP: Partial<Record<NodeJS.Platform, string>> = {
@@ -15,10 +17,12 @@ const ICON_MAP: Partial<Record<NodeJS.Platform, string>> = {
 };
 const DEFAULT_ICON_FILE = 'logo.png';
 
-type LogLevel = 'info' | 'error' | 'warn';
+type LogLevel = 'debug' | 'info' | 'error' | 'warn';
 
 let logFilePath: string | null = null;
 const pendingLogs: string[] = [];
+const launchLogBuffer: LaunchLogEntry[] = [];
+const LAUNCH_LOG_LIMIT = 500;
 
 function persistLog(line: string): void {
   if (!logFilePath) {
@@ -49,11 +53,42 @@ function logMessage(level: LogLevel, message: string): void {
   persistLog(line);
   if (level === 'error') {
     console.error(message);
+  } else if (level === 'debug') {
+    console.debug(message);
   } else if (level === 'warn') {
     console.warn(message);
   } else {
     console.log(message);
   }
+}
+
+function emitLaunchLog(level: LaunchLogLevel, message: string): void {
+  const entry: LaunchLogEntry = {
+    level,
+    message,
+    timestamp: Date.now(),
+  };
+  logMessage(level, message);
+  launchLogBuffer.push(entry);
+  if (launchLogBuffer.length > LAUNCH_LOG_LIMIT) {
+    launchLogBuffer.splice(0, launchLogBuffer.length - LAUNCH_LOG_LIMIT);
+  }
+  broadcast(IpcEvent.LaunchLog, entry);
+}
+
+function classifyLaunchLog(message: unknown, fallback: LaunchLogLevel = 'info'): LaunchLogLevel {
+  const text = String(message ?? '');
+  const normalized = text.toLowerCase();
+  if (normalized.includes('error') || normalized.includes('exception') || normalized.includes('fatal') || normalized.includes('stack trace') || /\[error/.test(normalized)) {
+    return 'error';
+  }
+  if (normalized.includes('warn') || /\[warn/.test(normalized)) {
+    return 'warn';
+  }
+  if (normalized.includes('debug') || normalized.includes('trace') || /\[debug/.test(normalized)) {
+    return 'debug';
+  }
+  return fallback;
 }
 
 function resolveAssetPath(fileName: string): string {
@@ -74,6 +109,7 @@ function createWindowIcon() {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let logWindow: BrowserWindow | null = null;
 const launcherService = new LauncherService();
 
 function broadcast(event: IpcEvent, payload: unknown): void {
@@ -84,10 +120,10 @@ function broadcast(event: IpcEvent, payload: unknown): void {
 
 async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
-    width: 740,
-    height: 520,
-    minWidth: 740,
-    minHeight: 520,
+    width: 840,
+    height: 600,
+    minWidth: 840,
+    minHeight: 600,
     resizable: false,
     title: 'Shindo Launcher',
     show: false,
@@ -182,6 +218,62 @@ async function createWindow(): Promise<void> {
         logMessage('error', `[delay] Failed to snapshot renderer DOM: ${error instanceof Error ? error.message : String(error)}`);
       });
   }, 5000);
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    if (logWindow) {
+      logWindow.close();
+      logWindow = null;
+    }
+  });
+}
+
+async function createLogWindow(): Promise<void> {
+  if (logWindow) {
+    if (logWindow.isMinimized()) {
+      logWindow.restore();
+    }
+    logWindow.focus();
+    return;
+  }
+
+  logWindow = new BrowserWindow({
+    width: 920,
+    height: 620,
+    minWidth: 700,
+    minHeight: 480,
+    resizable: true,
+    title: 'Shindo Logs',
+    show: false,
+    frame: false,
+    backgroundColor: '#0b1224',
+    icon: createWindowIcon(),
+    titleBarStyle: process.platform === 'darwin' ? 'hidden' : undefined,
+    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 16 } : undefined,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  logWindow.on('ready-to-show', () => {
+    logWindow?.show();
+  });
+
+  logWindow.on('closed', () => {
+    logWindow = null;
+    emitLaunchLog('info', 'Janela de logs fechada.');
+  });
+
+  if (isDev && process.env.VITE_DEV_SERVER_URL) {
+    await logWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}/logs.html`);
+    logWindow.webContents.openDevTools({ mode: 'detach' });
+  } else {
+    const rendererPath = path.join(__dirname, '../renderer/logs.html');
+    await logWindow.loadFile(rendererPath);
+  }
 }
 
 app.whenReady().then(async () => {
@@ -223,9 +315,45 @@ ipcMain.handle(IpcChannel.LauncherDownloadUpdate, () => launcherService.download
 
 ipcMain.handle(IpcChannel.ConfigGet, () => loadConfig());
 
-ipcMain.handle(IpcChannel.ConfigSet, (_event, patch) => updateConfig(patch ?? {}));
+ipcMain.handle(IpcChannel.ConfigSet, async (_event, patch) => {
+  const incomingPatch: Partial<LauncherConfig> = { ...(patch ?? {}) };
+  const previous = loadConfig();
+
+  // Clear stale JRE path when switching back to system
+  if (incomingPatch.jrePreference === 'system') {
+    incomingPatch.jrePath = undefined;
+  }
+
+  let next = updateConfig(incomingPatch);
+
+  const runtimeChanged = typeof incomingPatch.jrePreference === 'string'
+    && incomingPatch.jrePreference !== previous.jrePreference
+    && incomingPatch.jrePreference !== 'system';
+
+  if (runtimeChanged) {
+    const result = await ensureJre(next);
+    logMessage('info', result.message);
+    if (result.patch) {
+      next = updateConfig(result.patch);
+    }
+  }
+
+  return next;
+});
 
 ipcMain.handle(IpcChannel.SystemMemory, () => getSystemMemory());
+
+ipcMain.handle(IpcChannel.AccountsList, () => accountService.getPublicState());
+
+ipcMain.handle(IpcChannel.AccountsAddOffline, (_event, payload) =>
+  accountService.addOfflineAccount(payload),
+);
+
+ipcMain.handle(IpcChannel.AccountsAddMicrosoft, () => accountService.addMicrosoftAccount());
+
+ipcMain.handle(IpcChannel.AccountsRemove, (_event, payload) => accountService.removeAccount(payload));
+
+ipcMain.handle(IpcChannel.AccountsSelect, (_event, payload) => accountService.selectAccount(payload));
 
 ipcMain.handle(IpcChannel.RunStartupUpdate, async () => {
   await runStartupUpdateSequence(launcherService);
@@ -233,28 +361,49 @@ ipcMain.handle(IpcChannel.RunStartupUpdate, async () => {
 
 ipcMain.handle(IpcChannel.AppVersion, () => app.getVersion());
 
-ipcMain.handle(IpcChannel.WindowMinimize, () => {
-  mainWindow?.minimize();
+ipcMain.handle(IpcChannel.WindowMinimize, (event) => {
+  const target = BrowserWindow.fromWebContents(event.sender);
+  target?.minimize();
 });
 
-ipcMain.handle(IpcChannel.WindowClose, () => {
-  mainWindow?.close();
+ipcMain.handle(IpcChannel.WindowClose, (event) => {
+  const target = BrowserWindow.fromWebContents(event.sender);
+  target?.close();
 });
 
-ipcMain.handle(IpcChannel.LaunchStart, (_event, options) =>
-  launcherService.launchClient(options, {
-    onLog: (message) => broadcast(IpcEvent.LaunchLog, { level: 'info', message }),
-    onError: (message) => broadcast(IpcEvent.LaunchLog, { level: 'error', message }),
-    onClose: (code) => broadcast(IpcEvent.LaunchExit, { code }),
+ipcMain.handle(IpcChannel.LogWindowOpen, async () => {
+  await createLogWindow();
+});
+
+ipcMain.handle(IpcChannel.LogWindowClose, () => {
+  logWindow?.close();
+});
+
+ipcMain.handle(IpcChannel.LaunchLogHistory, () => [...launchLogBuffer]);
+
+ipcMain.handle(IpcChannel.LaunchLogClear, () => {
+  launchLogBuffer.length = 0;
+});
+
+ipcMain.handle(IpcChannel.LaunchStart, (_event, options) => {
+  emitLaunchLog('info', 'Iniciando ShindoClient...');
+  return launcherService.launchClient(options, {
+    onLog: (message) => emitLaunchLog(classifyLaunchLog(message, 'info'), message),
+    onError: (message) => emitLaunchLog(classifyLaunchLog(message, 'error'), message),
+    onClose: (code) => {
+      const exitMessage = `Processo finalizado com codigo ${code ?? 'desconhecido'}`;
+      emitLaunchLog('info', exitMessage);
+      broadcast(IpcEvent.LaunchExit, { code });
+    },
   }).then((result) => {
     const summary = result.pid
       ? `Cliente iniciado (pid ${result.pid}).`
       : 'Cliente iniciado.';
-    broadcast(IpcEvent.LaunchLog, { level: 'info', message: summary });
+    emitLaunchLog('info', summary);
     return result;
   }).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
-    broadcast(IpcEvent.LaunchLog, { level: 'error', message });
+    emitLaunchLog('error', message);
     throw error;
-  }),
-);
+  });
+});

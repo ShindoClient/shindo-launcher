@@ -1,5 +1,7 @@
-﻿import type { ClientStatePayload } from '@shindo/shared'
+import type { ClientStatePayload } from '@shindo/shared'
 import logoBanner from '../assets/logo.png'
+import type { Language } from '../i18n'
+import { getLanguage } from '../i18n'
 
 export interface VersionVisualConfig {
   image?: string
@@ -116,9 +118,71 @@ export const VERSION_PRESENTATIONS: Record<string, VersionPresentationConfig> = 
   },
 }
 
+const VERSION_COPY: Record<string, Partial<Record<Language, Partial<VersionPresentationConfig>>>> = {
+  default: {
+    en: {
+      name: 'Minecraft',
+      headline: 'Ready-to-play default experience',
+      description: 'Launch with the launcher\'s optimized settings.',
+    },
+  },
+  ShindoClient: {
+    en: {
+      name: 'Shindo Client',
+      headline: 'Maximum compatibility with competitive servers.',
+      description: 'Official build with custom features, refreshed libraries and optimisations.',
+      overrides: { optionLabel: 'Shindo Client - Build {build}' },
+    },
+  },
+  'ShindoClient-1.7.10': {
+    en: {
+      headline: 'Legacy compatibility with tuned performance.',
+      description: 'Tailored for 1.7.10-based servers while keeping classic features.',
+      overrides: { optionLabel: 'Shindo Client 1.7.10' },
+    },
+  },
+  'ShindoClient-1.8.9': {
+    en: {
+      headline: 'Competitive classic with modern optimisations.',
+      description: 'Preferred PvP version with exclusive launcher improvements.',
+      overrides: { optionLabel: 'Shindo Client 1.8.9' },
+    },
+  },
+  'ShindoClient-1.12.2': {
+    en: {
+      headline: 'Solid base for competitive modpacks.',
+      description: 'Broad compatibility with popular mods and tweaks for modern servers.',
+      overrides: { optionLabel: 'Shindo Client 1.12.2' },
+    },
+  },
+  'ShindoClient-1.16.5': {
+    en: {
+      headline: 'Ready for Nether Update servers.',
+      description: 'Enjoy launcher improvements on modern meta networks.',
+      overrides: { optionLabel: 'Shindo Client 1.16.5' },
+    },
+  },
+}
+
+function applyLocalization(
+  descriptor: VersionPresentationConfig,
+): VersionPresentationConfig {
+  const lang: Language = getLanguage()
+  const overrides = VERSION_COPY[descriptor.id]?.[lang] ?? VERSION_COPY.default?.[lang]
+  if (!overrides) return descriptor
+  return {
+    ...descriptor,
+    ...overrides,
+    overrides: {
+      ...descriptor.overrides,
+      ...overrides.overrides,
+    },
+  }
+}
+
 function resolveDescriptor(state: ClientStatePayload | null): VersionPresentationConfig {
   if (!state) {
-    return FALLBACK_PRESENTATION
+    return applyLocalization(FALLBACK_PRESENTATION)
   }
 
   const versionId = state.versionId
@@ -126,15 +190,15 @@ function resolveDescriptor(state: ClientStatePayload | null): VersionPresentatio
   if (versionId === 'ShindoClient') {
     const baseKey = state.baseVersion ? `ShindoClient-${state.baseVersion}` : null
     if (baseKey && VERSION_PRESENTATIONS[baseKey]) {
-      return VERSION_PRESENTATIONS[baseKey]
+      return applyLocalization(VERSION_PRESENTATIONS[baseKey])
     }
   }
 
   if (versionId && VERSION_PRESENTATIONS[versionId]) {
-    return VERSION_PRESENTATIONS[versionId]
+    return applyLocalization(VERSION_PRESENTATIONS[versionId])
   }
 
-  return FALLBACK_PRESENTATION
+  return applyLocalization(FALLBACK_PRESENTATION)
 }
 
 interface PresentationContext {

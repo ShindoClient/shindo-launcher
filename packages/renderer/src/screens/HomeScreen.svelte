@@ -6,6 +6,7 @@
   import { appStore } from '../store/appStore'
   import { resolveVersionPresentation } from '../config/versionCatalog'
   import VersionBanner from '../components/VersionBanner.svelte'
+  import { t } from '../i18n'
 
   const { launch, applyConfigPatch } = appStore
 
@@ -14,6 +15,7 @@
   $: clientState = state.clientState
   $: launching = state.launching
   $: launcherStatus = state.launcherStatus
+  $: playStatusLabel = noAccountSelected ? $t('home.status.accountRequired') : launcherStatus
   $: update = state.update
   $: updateStatus = update.status
   $: updateMessage = update.message
@@ -25,15 +27,32 @@
   $: phaseValue = phaseTotal > 0 ? Math.min(phaseIndex, phaseTotal) : 0
   $: phaseIndicator = phaseTotal > 0 ? `${phaseValue} / ${phaseTotal}` : '--'
   $: versionPresentation = resolveVersionPresentation(clientState)
+  $: accountsState = $appStore.accounts
+  $: activeAccount = accountsState.entries.find((entry) => entry.id === accountsState.activeAccountId)
+  $: noAccountSelected = !activeAccount
+  function minotarHead(id?: string | null, size = 96): string {
+    const safeId = id && id.trim() ? id : 'Steve'
+    return `https://minotar.net/helm/${safeId}/${size}`
+  }
+
+  function resolveAvatar(): string {
+    if (!activeAccount) {
+      return minotarHead()
+    }
+    return minotarHead(activeAccount.uuid || activeAccount.username, 96)
+  }
+
+  $: avatarUrl = resolveAvatar()
+  $: localizedUpdateMessage = localizeUpdateMessage(updateMessage, update.step)
 
   $: versionOptions = clientState
     ? [{ id: clientState.versionId, label: versionPresentation.optionLabel }]
     : []
   $: selectedVersionId = config?.versionId ?? clientState?.versionId ?? ''
   $: selectedVersionLabel =
-    versionOptions.find((option) => option.id === selectedVersionId)?.label ?? 'Selecione uma versao'
+    versionOptions.find((option) => option.id === selectedVersionId)?.label ?? $t('home.selectVersion')
 
-  $: playDisabled = launching || updateStatus !== 'completed'
+  $: playDisabled = launching || updateStatus !== 'completed' || noAccountSelected
 
   let versionMenuOpen = false
   let dropdownRef: HTMLDivElement | null = null
@@ -63,6 +82,28 @@
   function handlePlay() {
     launch().catch(() => undefined)
   }
+
+  function localizeUpdateMessage(message: string, step: typeof update.step): string {
+    const lower = (message || '').toLowerCase()
+    if (step === 'launcher-update') {
+      if (lower.includes('baixando') || lower.includes('download')) return $t('home.progress.launcherDownloading')
+      if (lower.includes('aplicando') || lower.includes('apply')) return $t('home.progress.launcherApplying')
+      if (lower.includes('preparada') || lower.includes('ready')) return $t('home.progress.launcherReady')
+      if (lower.includes('atualizado') || lower.includes('up to date')) return $t('home.progress.launcherUpToDate')
+      return $t('home.progress.launcher')
+    }
+    if (step === 'jre-setup') {
+      if (lower.includes('verificado') || lower.includes('ready')) return $t('home.progress.jreReady')
+      return $t('home.progress.jreChecking')
+    }
+    if (step === 'client-update') {
+      if (lower.includes('pronto') || lower.includes('ready') || lower.includes('sincronizado')) {
+        return $t('home.progress.clientReady')
+      }
+      return $t('home.progress.clientSync')
+    }
+    return message
+  }
 </script>
 
 <div class="flex h-full w-full">
@@ -70,7 +111,7 @@
     {#if updateStatus !== 'completed'}
       <div class="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-100">
         <AlertCircle class="h-4 w-4 shrink-0" />
-        <span>{updateMessage}</span>
+        <span>{localizedUpdateMessage}</span>
       </div>
     {/if}
 
@@ -81,8 +122,8 @@
 
       <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">
-          <span>Atualizacao</span>
-          <span class="text-slate-200">{updateMessage}</span>
+          <span>{$t('home.updateTitle')}</span>
+          <span class="text-slate-200">{localizedUpdateMessage}</span>
         </div>
         <div
           class="relative mt-3 h-[10px] overflow-hidden rounded-full border border-slate-800/70 bg-slate-900/80"
@@ -97,7 +138,10 @@
           />
         </div>
         <div class="mt-2 flex items-center justify-between text-xs text-slate-400">
-          <span>Fases: <strong class="font-semibold text-slate-200">{phaseIndicator}</strong></span>
+          <span>
+            {$t('home.phases')}:
+            <strong class="font-semibold text-slate-200">{phaseIndicator}</strong>
+          </span>
           <span class="font-semibold text-emerald-300">{updatePercentDisplay}</span>
         </div>
       </div>
@@ -111,9 +155,9 @@
         >
           <Play class="h-6 w-6" />
           <div class="flex min-w-[160px] flex-col">
-            <span class="text-lg leading-tight">{launching ? 'Iniciando...' : 'Jogar'}</span>
+            <span class="text-lg leading-tight">{launching ? $t('home.launching') : $t('home.play')}</span>
             <span class="mt-1 max-w-[240px] truncate text-xs font-medium text-emerald-950/80 group-disabled:text-emerald-200/80">
-              {launcherStatus}
+              {playStatusLabel}
             </span>
           </div>
         </button>
@@ -137,7 +181,7 @@
                 >
                   <span class="truncate">{option.label}</span>
                   {#if option.id === selectedVersionId}
-                    <span class="text-xs font-semibold text-indigo-400">Ativo</span>
+                    <span class="text-xs font-semibold text-indigo-400">{$t('home.active')}</span>
                   {/if}
                 </button>
               {/each}

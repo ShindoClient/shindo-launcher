@@ -18,6 +18,7 @@ import { checkLauncherUpdate, ensureLauncherUpdate, applyLauncherUpdate } from '
 import { getBaseDataDir, getVersionsDir } from '../utils/pathResolver';
 import { loadConfig } from './configService';
 import { downloadAsset } from './githubClient';
+import { accountService, type LaunchAccountContext } from './accountService';
 
 export interface LaunchCallbacks {
   onLog?: (message: string) => void;
@@ -25,8 +26,6 @@ export interface LaunchCallbacks {
   onProgress?: (details: { task: string; progress: number }) => void;
   onClose?: (code: number | null) => void;
 }
-
-const DEFAULT_USERNAME = 'ShindoPlayer';
 
 const LAUNCHWRAPPER_URL = 'https://libraries.minecraft.net/net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar';
 const REQUIRED_LIBRARIES = [
@@ -90,6 +89,34 @@ function parseJvmArgs(args?: string): string[] {
   return tokens.map((token) => token.replace(/^"(.*)"$/, '$1'));
 }
 
+type AuthPayload = Awaited<ReturnType<typeof Authenticator.getAuth>>;
+
+function stripUuid(uuid: string): string {
+  return uuid.replace(/-/g, '');
+}
+
+async function buildAuthorization(context: LaunchAccountContext): Promise<AuthPayload> {
+  if (context.accessToken) {
+    return {
+      access_token: context.accessToken,
+      client_token: context.clientToken,
+      uuid: stripUuid(context.uuid),
+      name: context.username,
+      user_properties: {},
+    };
+  }
+
+  const offline = await Authenticator.getAuth(context.username);
+  return {
+    ...offline,
+    access_token: offline.access_token ?? context.clientToken,
+    client_token: context.clientToken,
+    uuid: stripUuid(context.uuid),
+    name: context.username,
+    user_properties: offline.user_properties ?? {},
+  };
+}
+
 function extractCommand(proc: ChildProcessWithoutNullStreams | null): string[] {
   if (!proc) return [];
   if (Array.isArray(proc.spawnargs) && proc.spawnargs.length > 0) {
@@ -135,7 +162,6 @@ export class LauncherService {
     const config = loadConfig();
     const root = ensureDataRoot();
     const memory = resolveMemory(config, options?.memory);
-    const username = options?.username?.trim() || DEFAULT_USERNAME;
     const javaPath = options?.javaPath ?? config.jrePath;
     const versionsDir = getVersionsDir();
     const versionId = options?.versionId || config.versionId || clientState.versionId;
@@ -148,7 +174,8 @@ export class LauncherService {
     const configJvmArgs = parseJvmArgs(config.jvmArgs);
     const combinedJavaArgs = [...configJvmArgs, ...(options?.customArgs ?? [])];
 
-    const authorization = await Authenticator.getAuth(username);
+    const accountContext = await accountService.getLaunchContext();
+    const authorization = await buildAuthorization(accountContext);
 
     const launcher = new Client();
     const startedAt = Date.now();

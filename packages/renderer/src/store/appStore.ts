@@ -1,4 +1,6 @@
 import { writable, get } from 'svelte/store'
+import type { Language } from '../i18n'
+import { setLanguage, t } from '../i18n'
 import type {
   ClientStatePayload,
   LauncherConfig,
@@ -6,11 +8,12 @@ import type {
   UpdateCompletionPayload,
   UpdateErrorPayload,
   UpdateProgressPayload,
-  LaunchLogPayload,
   LaunchExitPayload,
+  AccountsStatePayload,
+  AccountProfile,
 } from '@shindo/shared'
 
-type Screen = 'update' | 'home' | 'settings'
+type Screen = 'update' | 'home' | 'settings' | 'accounts'
 
 type UpdateStatus = 'idle' | 'running' | 'completed' | 'error'
 
@@ -30,16 +33,20 @@ interface AppState {
   config: LauncherConfig | null
   systemMemory: SystemMemoryInfo | null
   clientState: ClientStatePayload | null
-  clientLogs: string[]
   initializing: boolean
   updateInFlight: boolean
   listenersRegistered: boolean
   launching: boolean
-  logWindowVisible: boolean
   launcherStatus: string
+  accounts: {
+    entries: AccountProfile[]
+    activeAccountId: string | null
+    limit: number
+    loading: boolean
+    loginInProgress: boolean
+    error?: string
+  }
 }
-
-const LOG_LIMIT = 200
 
 const initialState: AppState = {
   screen: 'update',
@@ -54,14 +61,169 @@ const initialState: AppState = {
   config: null,
   systemMemory: null,
   clientState: null,
-  clientLogs: [],
   initializing: false,
   updateInFlight: false,
   listenersRegistered: false,
   launching: false,
-  logWindowVisible: false,
-  launcherStatus: 'Preparando...',
+  launcherStatus: get(t)('home.status.preparing'),
+  accounts: {
+    entries: [],
+    activeAccountId: null,
+    limit: 6,
+    loading: false,
+    loginInProgress: false,
+  },
 }
+function applyAccountsPayload(state: AppState, payload: AccountsStatePayload): AppState {
+  return {
+    ...state,
+    accounts: {
+      ...state.accounts,
+      entries: payload.accounts,
+      activeAccountId: payload.activeAccountId,
+      limit: payload.limit,
+      loading: false,
+      loginInProgress: false,
+      error: undefined,
+    },
+  }
+}
+
+async function refreshAccounts(): Promise<void> {
+  store.update((state) => ({
+    ...state,
+    accounts: {
+      ...state.accounts,
+      loading: true,
+      error: undefined,
+    },
+  }))
+
+  try {
+    const payload = await window.shindo.getAccounts()
+    store.update((state) => applyAccountsPayload(state, payload))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    store.update((state) => ({
+      ...state,
+      accounts: {
+        ...state.accounts,
+        loading: false,
+        error: message,
+      },
+    }))
+    throw error
+  }
+}
+
+async function addOfflineAccount(username: string): Promise<void> {
+  store.update((state) => ({
+    ...state,
+    accounts: {
+      ...state.accounts,
+      loading: true,
+      error: undefined,
+    },
+  }))
+
+  try {
+    const payload = await window.shindo.addOfflineAccount({ username })
+    store.update((state) => applyAccountsPayload(state, payload))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    store.update((state) => ({
+      ...state,
+      accounts: {
+        ...state.accounts,
+        loading: false,
+        error: message,
+      },
+    }))
+    throw error
+  }
+}
+
+async function addMicrosoftAccount(): Promise<void> {
+  store.update((state) => ({
+    ...state,
+    accounts: {
+      ...state.accounts,
+      loginInProgress: true,
+      error: undefined,
+    },
+  }))
+
+  try {
+    const payload = await window.shindo.addMicrosoftAccount()
+    store.update((state) => applyAccountsPayload(state, payload))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    store.update((state) => ({
+      ...state,
+      accounts: {
+        ...state.accounts,
+        loginInProgress: false,
+        error: message,
+      },
+    }))
+    throw error
+  }
+}
+
+async function removeAccount(accountId: string): Promise<void> {
+  store.update((state) => ({
+    ...state,
+    accounts: {
+      ...state.accounts,
+      loading: true,
+      error: undefined,
+    },
+  }))
+
+  try {
+    const payload = await window.shindo.removeAccount({ accountId })
+    store.update((state) => applyAccountsPayload(state, payload))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    store.update((state) => ({
+      ...state,
+      accounts: {
+        ...state.accounts,
+        loading: false,
+        error: message,
+      },
+    }))
+    throw error
+  }
+}
+
+async function selectAccount(accountId: string): Promise<void> {
+  store.update((state) => ({
+    ...state,
+    accounts: {
+      ...state.accounts,
+      loading: true,
+      error: undefined,
+    },
+  }))
+
+  try {
+    const payload = await window.shindo.selectAccount({ accountId })
+    store.update((state) => applyAccountsPayload(state, payload))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    store.update((state) => ({
+      ...state,
+      accounts: {
+        ...state.accounts,
+        loading: false,
+        error: message,
+      },
+    }))
+    throw error
+  }
+}
+
 
 const store = writable<AppState>(initialState)
 
@@ -70,14 +232,30 @@ const unsubscribers: Array<() => void> = []
 
 console.log('[renderer] bridge available:', typeof window.shindo !== 'undefined')
 
-function pushClientLog(
-  logs: string[],
-  level: 'INFO' | 'WARN' | 'ERROR',
-  message: string,
-): string[] {
-  const timestamp = new Date().toLocaleTimeString()
-  const line = `[${timestamp}] [${level}] ${message}`
-  return [...logs.slice(-LOG_LIMIT + 1), line]
+function translate(key: string, params?: Record<string, string | number>): string {
+  return get(t)(key, params)
+}
+
+function localizeUpdateMessage(message: string, step: UpdateProgressPayload['step'] | null): string {
+  const lower = (message || '').toLowerCase()
+  if (step === 'launcher-update') {
+    if (lower.includes('baixando') || lower.includes('download')) return translate('home.progress.launcherDownloading')
+    if (lower.includes('aplicando') || lower.includes('apply')) return translate('home.progress.launcherApplying')
+    if (lower.includes('preparada') || lower.includes('ready')) return translate('home.progress.launcherReady')
+    if (lower.includes('atualizado') || lower.includes('up to date')) return translate('home.progress.launcherUpToDate')
+    return translate('home.progress.launcher')
+  }
+  if (step === 'jre-setup') {
+    if (lower.includes('verificado') || lower.includes('ready')) return translate('home.progress.jreReady')
+    return translate('home.progress.jreChecking')
+  }
+  if (step === 'client-update') {
+    if (lower.includes('pronto') || lower.includes('ready') || lower.includes('sincronizado')) {
+      return translate('home.progress.clientReady')
+    }
+    return translate('home.progress.clientSync')
+  }
+  return message
 }
 
 function registerListeners(): void {
@@ -93,7 +271,6 @@ function registerListeners(): void {
   unsubscribers.push(
     window.shindo.onUpdateError((payload) => handleUpdateError(payload)),
   )
-  unsubscribers.push(window.shindo.onLaunchLog((payload) => appendLog(payload)))
   unsubscribers.push(window.shindo.onLaunchExit((payload) => appendExitLog(payload)))
 
   store.update((state) => ({ ...state, listenersRegistered: true }))
@@ -109,18 +286,19 @@ async function refreshClientState(): Promise<void> {
 }
 
 function handleUpdateProgress(payload: UpdateProgressPayload): void {
+  const localizedMessage = localizeUpdateMessage(payload.message, payload.step)
   store.update((state) => ({
     ...state,
     update: {
       status: 'running',
       step: payload.step,
-      message: payload.message,
+      message: localizedMessage,
       percent: Math.min(100, Math.max(0, payload.percent)),
       phaseIndex: Math.max(0, payload.phaseIndex),
       phaseTotal: Math.max(0, payload.phaseTotal),
       errorMessage: undefined,
     },
-    launcherStatus: payload.message,
+    launcherStatus: localizedMessage,
   }))
 }
 
@@ -131,48 +309,39 @@ function handleUpdateCompleted(_payload: UpdateCompletionPayload): void {
       ...state.update,
       status: 'completed',
       percent: 100,
-      message: state.update.message || 'Atualizacao concluida.',
+      message: state.update.message || translate('home.status.updateComplete'),
       phaseIndex: state.update.phaseTotal || state.update.phaseIndex || 0,
       errorMessage: undefined,
     },
-    launcherStatus: 'Atualizacao concluida. Pronto para jogar.',
+    launcherStatus: translate('home.status.updateComplete'),
     screen: 'home',
   }))
   void refreshClientState()
 }
 
 function handleUpdateError(payload: UpdateErrorPayload): void {
+  const message = translate('home.status.updateError', { message: payload.message })
   store.update((state) => ({
     ...state,
     update: {
       status: 'error',
       step: null,
-      message: 'Falha durante a atualizacao.',
+      message,
       percent: 0,
       phaseIndex: 0,
       phaseTotal: 0,
       errorMessage: payload.message,
     },
-    launcherStatus: `Erro durante a atualizacao: ${payload.message}`,
-  }))
-}
-
-function appendLog(payload: LaunchLogPayload): void {
-  store.update((state) => ({
-    ...state,
-    clientLogs: pushClientLog(
-      state.clientLogs,
-      payload.level.toUpperCase() as 'INFO' | 'WARN' | 'ERROR',
-      payload.message,
-    ),
+    launcherStatus: message,
   }))
 }
 
 function appendExitLog(payload: LaunchExitPayload): void {
-  const exitMessage = `Processo finalizado com codigo ${payload.code ?? 'desconhecido'}`
+  const exitMessage = payload.code === null || payload.code === undefined
+    ? translate('home.status.exitUnknown')
+    : translate('home.status.exit', { code: payload.code })
   store.update((state) => ({
     ...state,
-    clientLogs: pushClientLog(state.clientLogs, 'INFO', exitMessage),
     launcherStatus: exitMessage,
   }))
 }
@@ -186,13 +355,13 @@ async function startUpdate(): Promise<void> {
     update: {
       status: 'running',
       step: null,
-      message: 'Iniciando verificacoes...',
+      message: translate('home.status.checking'),
       percent: 0,
       phaseIndex: 0,
       phaseTotal: 0,
       errorMessage: undefined,
     },
-    launcherStatus: 'Iniciando verificacoes...',
+    launcherStatus: translate('home.status.checking'),
   }))
 
   try {
@@ -208,29 +377,34 @@ async function startUpdate(): Promise<void> {
 async function applyConfigPatch(patch: Partial<LauncherConfig>): Promise<void> {
   const currentState = get(store)
   const previousConfig = currentState.config
-  const previousLogWindowVisible = currentState.logWindowVisible
   if (previousConfig) {
     const optimistic = { ...previousConfig, ...patch } as LauncherConfig
+    if (optimistic.language) {
+      setLanguage(optimistic.language as Language)
+    }
     store.update((state) => ({
       ...state,
       config: optimistic,
-      logWindowVisible: patch.showLogsOnLaunch === false ? false : state.logWindowVisible,
     }))
   }
   try {
     const updated = await window.shindo.setConfig(patch)
+    if (updated.language) {
+      setLanguage(updated.language as Language)
+    }
     store.update((state) => ({
       ...state,
       config: updated,
-      logWindowVisible: updated.showLogsOnLaunch ? state.logWindowVisible : false,
     }))
   } catch (error) {
     if (previousConfig) {
       store.update((state) => ({
         ...state,
         config: previousConfig,
-        logWindowVisible: previousLogWindowVisible,
       }))
+      if (previousConfig.language) {
+        setLanguage(previousConfig.language as Language)
+      }
     }
     throw error
   }
@@ -238,18 +412,27 @@ async function applyConfigPatch(patch: Partial<LauncherConfig>): Promise<void> {
 
 async function launch(): Promise<void> {
   const current = get(store)
+  if (!current.accounts.activeAccountId) {
+    store.update((state) => ({
+      ...state,
+      launcherStatus: translate('home.status.accountRequired'),
+    }))
+    return
+  }
   if (current.launching) return
 
   store.update((state) => {
-    const showLogs = state.config?.showLogsOnLaunch ?? true
     return {
       ...state,
       launching: true,
-      clientLogs: pushClientLog(state.clientLogs, 'INFO', 'Iniciando ShindoClient...'),
-      launcherStatus: 'Iniciando ShindoClient...',
-      logWindowVisible: showLogs ? true : state.logWindowVisible,
+      launcherStatus: translate('home.status.launching'),
     }
   })
+
+  const showLogs = current.config?.showLogsOnLaunch ?? true
+  if (showLogs) {
+    window.shindo.openLogWindow().catch((error) => console.error('Failed to open log window', error))
+  }
 
   try {
     const config = get(store).config
@@ -261,16 +444,15 @@ async function launch(): Promise<void> {
 
     const result = await window.shindo.launchClient(options)
     const summary = result.pid
-      ? `ShindoClient iniciado (pid ${result.pid}).`
-      : 'ShindoClient iniciado.'
+      ? translate('home.status.startedPid', { pid: result.pid })
+      : translate('home.status.started')
     store.update((state) => ({ ...state, launcherStatus: summary }))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error('Failed to launch client', message)
     store.update((state) => ({
       ...state,
-      clientLogs: pushClientLog(state.clientLogs, 'ERROR', `Falha ao iniciar cliente: ${message}`),
-      launcherStatus: `Falha ao iniciar cliente: ${message}`,
+      launcherStatus: translate('home.status.failed', { message }),
     }))
   }
 
@@ -292,26 +474,33 @@ export const appStore = {
         window.shindo.getSystemMemory(),
       ])
 
+      if (config.language) {
+        setLanguage(config.language as Language)
+      }
       store.update((prev) => ({ ...prev, config, systemMemory }))
     } finally {
       store.update((prev) => ({ ...prev, initializing: false }))
     }
 
     await refreshClientState()
+    try {
+      await refreshAccounts()
+    } catch (error) {
+      console.error('Falha ao carregar contas', error)
+    }
     await startUpdate()
   },
   setScreen: (screen: Screen) => {
     store.update((state) => ({ ...state, screen }))
   },
-  setLogWindowVisible: (visible: boolean) => {
-    store.update((state) => ({ ...state, logWindowVisible: visible }))
-  },
-  clearClientLogs: () => {
-    store.update((state) => ({ ...state, clientLogs: [] }))
-  },
   applyConfigPatch,
   startUpdate,
   launch,
+  reloadAccounts: refreshAccounts,
+  addOfflineAccount,
+  addMicrosoftAccount,
+  removeAccount,
+  selectAccount,
   get state() {
     return get(store)
   },

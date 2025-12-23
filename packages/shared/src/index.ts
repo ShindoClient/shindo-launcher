@@ -12,6 +12,15 @@ export const enum IpcChannel {
   WindowMinimize = 'shindo:window.minimize',
   WindowClose = 'shindo:window.close',
   AppVersion = 'shindo:app.version',
+  AccountsList = 'shindo:accounts.list',
+  AccountsAddOffline = 'shindo:accounts.add-offline',
+  AccountsAddMicrosoft = 'shindo:accounts.add-microsoft',
+  AccountsRemove = 'shindo:accounts.remove',
+  AccountsSelect = 'shindo:accounts.select',
+  LogWindowOpen = 'shindo:logs.open',
+  LogWindowClose = 'shindo:logs.close',
+  LaunchLogHistory = 'shindo:launch.log-history',
+  LaunchLogClear = 'shindo:launch.log-clear',
 }
 
 export const enum IpcEvent {
@@ -20,6 +29,14 @@ export const enum IpcEvent {
   UpdateError = 'shindo:update.error',
   LaunchLog = 'shindo:launch.log',
   LaunchExit = 'shindo:launch.exit',
+}
+
+export type LaunchLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface LaunchLogEntry {
+  level: LaunchLogLevel;
+  message: string;
+  timestamp: number;
 }
 
 export interface ReleaseAssetInfo {
@@ -98,7 +115,16 @@ export interface LauncherBridge {
   runStartupUpdate(): Promise<void>;
   minimizeWindow(): Promise<void>;
   closeWindow(): Promise<void>;
+  openLogWindow(): Promise<void>;
+  closeLogWindow(): Promise<void>;
+  getLaunchLogs(): Promise<LaunchLogEntry[]>;
+  clearLaunchLogs(): Promise<void>;
   getVersion(): Promise<string>;
+  getAccounts(): Promise<AccountsStatePayload>;
+  addOfflineAccount(payload: OfflineAccountRequestPayload): Promise<AccountsStatePayload>;
+  addMicrosoftAccount(): Promise<AccountsStatePayload>;
+  removeAccount(payload: AccountSelectionPayload): Promise<AccountsStatePayload>;
+  selectAccount(payload: AccountSelectionPayload): Promise<AccountsStatePayload>;
   onUpdateProgress(callback: (event: UpdateProgressPayload) => void): () => void;
   onUpdateCompleted(callback: (payload: UpdateCompletionPayload) => void): () => void;
   onUpdateError(callback: (payload: UpdateErrorPayload) => void): () => void;
@@ -113,6 +139,7 @@ export interface LauncherConfig {
   jvmArgs: string;
   versionId: string;
   showLogsOnLaunch: boolean;
+  language: 'en' | 'pt';
 }
 
 export interface SystemMemoryInfo {
@@ -142,10 +169,37 @@ export interface UpdateErrorPayload {
 }
 
 export interface LaunchLogPayload {
-  level: 'info' | 'warn' | 'error';
+  level: LaunchLogLevel;
   message: string;
+  timestamp: number;
 }
 
 export interface LaunchExitPayload {
   code: number | null;
+}
+
+export type AccountType = 'offline' | 'microsoft';
+
+export interface AccountProfile {
+  id: string;
+  type: AccountType;
+  username: string;
+  uuid: string;
+  createdAt: number;
+  lastUsedAt?: number;
+  skinUrl?: string | null;
+}
+
+export interface AccountsStatePayload {
+  accounts: AccountProfile[];
+  activeAccountId: string | null;
+  limit: number;
+}
+
+export interface OfflineAccountRequestPayload {
+  username: string;
+}
+
+export interface AccountSelectionPayload {
+  accountId: string;
 }

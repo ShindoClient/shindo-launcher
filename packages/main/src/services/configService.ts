@@ -11,6 +11,7 @@ const DEFAULT_CONFIG: LauncherConfig = {
   jvmArgs: '',
   versionId: 'ShindoClient',
   showLogsOnLaunch: true,
+  language: 'en',
 };
 
 function ensureConfigDir(): void {
