@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import Minus from 'lucide-svelte/icons/minus'
-  import X from 'lucide-svelte/icons/x'
-  import Settings from 'lucide-svelte/icons/settings'
-  import logoUrl from '../assets/logo.png'
-  import { appStore } from '../store/appStore'
-  import { t } from '../i18n'
+  import Minus from 'lucide-svelte/icons/minus';
+  import Settings from 'lucide-svelte/icons/settings';
+  import X from 'lucide-svelte/icons/x';
+  import { onMount } from 'svelte';
+  import logoUrl from '../assets/logo.png';
+  import { t } from '../i18n';
+  import { appStore } from '../store/appStore';
 
   const TITLE = 'SHINDO LAUNCHER'
   const { setScreen } = appStore
@@ -84,7 +84,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 40px;
+    height: 60px;
     padding: 0 16px;
     background: #000000;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -136,7 +136,7 @@
 
   .control-button {
     width: 32px;
-    height: 24px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
