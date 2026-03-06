@@ -3,9 +3,12 @@
   "private": true,
   "version": "0.2.2",
   "description": "Shindo Launcher desktop app",
-  "author": {
-    "name": "MikiDevAHM",
-    "email": "contato_miki@mittelsdorf.me"
+  "authors": {
+    "name": [
+      "MikiDevAHM",
+      "EaeDoonGG"
+    ],
+    "email": "miki@mittelsdorf.me"
   },
   "type": "commonjs",
   "main": "dist/main/main.js",
