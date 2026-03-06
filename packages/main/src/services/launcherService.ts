@@ -6,6 +6,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type {
   ClientStatePayload,
   ClientUpdatePayload,
+  VersionCatalogPayload,
   LaunchClientOptionsPayload,
   LaunchClientResultPayload,
   LauncherConfig,
@@ -13,12 +14,13 @@ import type {
   LauncherUpdateResultPayload,
   MemoryOptions,
 } from '@shindo/shared';
-import { ensureClientUpToDate, getLocalClientState, type EnsureClientOptions } from './clientManager';
+import { ensureClientUpToDate, getLocalClientState, getVersionCatalog, type EnsureClientOptions } from './clientManager';
 import { checkLauncherUpdate, ensureLauncherUpdate, applyLauncherUpdate } from './launcherUpdater';
 import { getBaseDataDir, getVersionsDir } from '../utils/pathResolver';
-import { loadConfig } from './configService';
+import { loadConfig, updateConfig } from './configService';
 import { downloadAsset } from './githubClient';
 import { accountService, type LaunchAccountContext } from './accountService';
+import { ensureJre } from './jreManager';
 
 export interface LaunchCallbacks {
   onLog?: (message: string) => void;
@@ -126,12 +128,19 @@ function extractCommand(proc: ChildProcessWithoutNullStreams | null): string[] {
 }
 
 export class LauncherService {
+  private activeProcess: ChildProcessWithoutNullStreams | null = null;
+
   async ensureClientUpToDate(options?: EnsureClientOptions): Promise<ClientUpdatePayload> {
     return ensureClientUpToDate(options);
   }
 
+  async getVersionCatalog(): Promise<VersionCatalogPayload> {
+    return getVersionCatalog();
+  }
+
   getClientState(): ClientStatePayload {
-    return getLocalClientState();
+    const config = loadConfig();
+    return getLocalClientState({ versionId: config.versionId });
   }
 
   async checkLauncherUpdate(): Promise<LauncherUpdateInfoPayload> {
@@ -146,29 +155,83 @@ export class LauncherService {
     return applyLauncherUpdate(downloadedPath);
   }
 
+  async stopClient(): Promise<boolean> {
+    const proc = this.activeProcess;
+    if (!proc || proc.killed) {
+      this.activeProcess = null;
+      return false;
+    }
+
+    try {
+      proc.kill('SIGTERM');
+    } catch {
+      try {
+        proc.kill();
+      } catch {
+        return false;
+      }
+    }
+
+    const terminated = await new Promise<boolean>((resolve) => {
+      let settled = false;
+
+      const settle = (value: boolean) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+
+      proc.once('close', () => settle(true));
+      setTimeout(() => {
+        if (!settled) {
+          try {
+            proc.kill('SIGKILL');
+          } catch {
+            // ignore hard-kill errors
+          }
+        }
+      }, 2200);
+      setTimeout(() => settle(proc.killed), 4200);
+    });
+
+    return terminated;
+  }
+
   async launchClient(
     options?: LaunchClientOptionsPayload,
     callbacks?: LaunchCallbacks,
   ): Promise<LaunchClientResultPayload> {
     console.log('[LAUNCHER] launchClient called with options:', options);
-    
-    let clientState = this.getClientState();
-    console.log('[LAUNCHER] Initial client state:', clientState);
-    
-    if (!clientState.versionJsonPath) {
-      console.log('[LAUNCHER] No versionJsonPath, ensuring client is up to date');
-      clientState = await this.ensureClientUpToDate();
-      console.log('[LAUNCHER] After ensureClientUpToDate:', clientState);
+    let config = loadConfig();
+    console.log('[LAUNCHER] Config loaded:', config);
+
+    const jreResult = await ensureJre(config);
+    console.log('[LAUNCHER] JRE reconciliation:', jreResult.message);
+    if (jreResult.patch) {
+      config = updateConfig(jreResult.patch);
     }
+    
+    const selectedBuild =
+      typeof options?.build === 'number' && Number.isFinite(options.build)
+        ? options.build
+        : (typeof config.selectedBuild === 'number' && Number.isFinite(config.selectedBuild) ? config.selectedBuild : undefined);
+
+    console.log('[LAUNCHER] Ensuring selected client build:', {
+      versionId: options?.versionId || config.versionId,
+      build: selectedBuild ?? null,
+    });
+
+    const clientState = await this.ensureClientUpToDate({
+      versionId: options?.versionId || config.versionId,
+      build: selectedBuild,
+    });
+    console.log('[LAUNCHER] Client state after ensure:', clientState);
 
     if (!clientState.versionJsonPath) {
       console.error('[LAUNCHER] ShindoClient.json not found');
       throw new Error('ShindoClient.json not found. Run the update before launching.');
     }
 
-    const config = loadConfig();
-    console.log('[LAUNCHER] Config loaded:', config);
-    
     const root = ensureDataRoot();
     const memory = resolveMemory(config, options?.memory);
     const javaPath = options?.javaPath ?? config.jrePath;
@@ -247,9 +310,13 @@ export class LauncherService {
     });
 
     console.log('[LAUNCHER] Process launched, pid:', proc?.pid);
+    this.activeProcess = proc ?? null;
 
-    if (proc && callbacks?.onClose) {
-      proc.on('close', (code) => callbacks.onClose?.(code));
+    if (proc) {
+      proc.on('close', (code) => {
+        this.activeProcess = null;
+        callbacks?.onClose?.(code);
+      });
     }
 
     return {

@@ -16,6 +16,7 @@ import type {
   LaunchLogPayload,
   LaunchExitPayload,
   AccountsStatePayload,
+  VersionCatalogPayload,
   OfflineAccountRequestPayload,
   AccountSelectionPayload,
   LaunchLogEntry,
@@ -51,6 +52,8 @@ const bridge: LauncherBridge = {
     ipcRenderer.invoke(IpcChannel.LauncherDownloadUpdate) as Promise<LauncherUpdateResultPayload>,
   launchClient: (options?: LaunchClientOptionsPayload) =>
     ipcRenderer.invoke(IpcChannel.LaunchStart, options) as Promise<LaunchClientResultPayload>,
+  stopClient: () =>
+    ipcRenderer.invoke(IpcChannel.LaunchStop) as Promise<boolean>,
   getConfig: () =>
     ipcRenderer.invoke(IpcChannel.ConfigGet) as Promise<LauncherConfig>,
   setConfig: (patch) =>
@@ -65,6 +68,8 @@ const bridge: LauncherBridge = {
     ipcRenderer.invoke(IpcChannel.LaunchLogHistory) as Promise<LaunchLogEntry[]>,
   clearLaunchLogs: () =>
     ipcRenderer.invoke(IpcChannel.LaunchLogClear) as Promise<void>,
+  getVersionCatalog: () =>
+    ipcRenderer.invoke(IpcChannel.VersionCatalog) as Promise<VersionCatalogPayload>,
   openLogWindow: () =>
     ipcRenderer.invoke(IpcChannel.LogWindowOpen) as Promise<void>,
   closeLogWindow: () =>

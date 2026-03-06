@@ -19,8 +19,8 @@ import type {
 } from '@shindo/shared';
 import { downloadAsset, fetchLatestRelease, GitHubAsset, GitHubRelease, GitHubHttpError } from './githubClient';
 import { getLauncherUpdateDir } from '../utils/pathResolver';
+import { distributionConfig } from '../config/distributionConfig';
 
-const DEFAULT_REPO = 'ShindoClient/shindo-launcher';
 const PLATFORM_HINTS: Partial<Record<NodeJS.Platform, string[]>> = {
   win32: ['win', 'windows', 'exe'],
   darwin: ['mac', 'darwin', 'osx', 'dmg'],
@@ -34,7 +34,7 @@ let lastDownloadUsedAutoUpdater = false;
 const progressListeners = new Set<(info: ProgressInfo) => void>();
 
 function getRepo(): string {
-  return process.env.SHINDO_LAUNCHER_REPO || DEFAULT_REPO;
+  return distributionConfig.launcher.githubRepo;
 }
 
 function configureAutoUpdater(): boolean {

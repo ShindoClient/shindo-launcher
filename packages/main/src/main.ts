@@ -366,6 +366,10 @@ ipcMain.handle(IpcChannel.ClientState, async () =>
   launcherService.getClientState(),
 );
 
+ipcMain.handle(IpcChannel.VersionCatalog, async () =>
+  launcherService.getVersionCatalog(),
+);
+
 ipcMain.handle(IpcChannel.LauncherCheckUpdate, () =>
   launcherService.checkLauncherUpdate(),
 );
@@ -387,12 +391,11 @@ ipcMain.handle(IpcChannel.ConfigSet, async (_event, patch) => {
 
   let next = updateConfig(incomingPatch);
 
-  const runtimeChanged =
-    typeof incomingPatch.jrePreference === "string" &&
-    incomingPatch.jrePreference !== previous.jrePreference &&
-    incomingPatch.jrePreference !== "system";
+  const shouldReconcileRuntime =
+    Object.prototype.hasOwnProperty.call(incomingPatch, "jrePreference") ||
+    Object.prototype.hasOwnProperty.call(incomingPatch, "jrePath");
 
-  if (runtimeChanged) {
+  if (shouldReconcileRuntime) {
     const result = await ensureJre(next);
     logMessage("info", result.message);
     if (result.patch) {
@@ -482,4 +485,13 @@ ipcMain.handle(IpcChannel.LaunchStart, (_event, options) => {
       emitLaunchLog("error", message);
       throw error;
     });
+});
+
+ipcMain.handle(IpcChannel.LaunchStop, async () => {
+  const stopped = await launcherService.stopClient();
+  emitLaunchLog(
+    "info",
+    stopped ? "Solicitacao de encerramento do cliente enviada." : "Nenhum cliente em execucao para encerrar.",
+  );
+  return stopped;
 });

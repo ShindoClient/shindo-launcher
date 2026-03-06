@@ -60,6 +60,33 @@ Signing is disabled by default (`CSC_IDENTITY_AUTO_DISCOVERY=false`). Set the pr
 
 The update orchestrator (`packages/main/src/services/updateOrchestrator.ts`) emits progress via `IpcEvent.UpdateProgress`, so the renderer can animate the Update screen.
 
+## Distribution / CDN (Multi-Version)
+
+Client update resolution is now centralized and version-aware:
+
+- `packages/main/src/config/distributionConfig.ts`
+  - Single source of truth for distribution defaults and env overrides.
+  - Controls CDN base URL, manifest candidates, GitHub fallback repos and default asset names.
+- `packages/main/src/services/cdnClient.ts`
+  - Typed CDN lookup layer for `https://cdn.shindoclient.com`.
+  - Accepts multiple manifest shapes and direct per-version manifests.
+- `packages/main/src/services/clientManager.ts`
+  - Resolves per-version client package with **CDN first, GitHub fallback**.
+  - Stores each version in its own `versions/<versionId>` directory.
+  - Keeps a per-version marker (`.client-version`) for reliable multi-version updates.
+
+Useful env vars for CI / local setup:
+
+- `SHINDO_CDN_BASE_URL` (default: `https://cdn.shindoclient.com`)
+- `SHINDO_CDN_MANIFESTS` (comma-separated manifest paths)
+- `SHINDO_CLIENT_DEFAULT_VERSION_ID` (default: `ShindoClient`)
+- `SHINDO_CLIENT_REPO` (default GitHub fallback repo)
+- `SHINDO_CLIENT_REPO_MAP` (JSON map of `versionId -> repo`)
+- `SHINDO_CLIENT_VERSION_ASSET` / `SHINDO_CLIENT_PACKAGE_ASSET`
+- `SHINDO_LAUNCHER_REPO` (launcher self-update repo)
+
+This layout reduces hardcoded values and makes parallel work safer (clear ownership by module and deterministic config inputs).
+
 ## Renderer Overview
 
 Svelte components live under `packages/renderer/src`:
@@ -70,6 +97,13 @@ Svelte components live under `packages/renderer/src`:
 - `SettingsScreen.svelte` edits persisted launcher settings with immediate saves.
 
 Tailwind classes keep the layout to a fixed viewport without scroll.
+
+Styling tokens are now centralized in:
+
+- `packages/renderer/src/styles/tokens.css`
+- `packages/renderer/src/styles/base.css`
+
+`packages/renderer/src/index.css` only wires fonts, tokens and Tailwind layers.
 
 ## IPC Surface (`window.shindo`)
 
@@ -97,4 +131,3 @@ Configurations:
 - `tsconfig.base.json` shared compiler defaults
 - `packages/renderer/svelte.config.js` + `vite.config.ts` for Svelte/Vite
 - `package.json` scripts wire the workspace builds and dev flow
-

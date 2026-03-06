@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import type { AccountProfile } from '@shindo/shared'
-  import Play from 'lucide-svelte/icons/play'
+  import type { AccountProfile, LauncherConfig, VersionCatalogEntry } from '@shindo/shared'
   import ChevronDown from 'lucide-svelte/icons/chevron-down'
+  import ChevronUp from 'lucide-svelte/icons/chevron-up'
   import Plus from 'lucide-svelte/icons/plus'
   import Shield from 'lucide-svelte/icons/shield'
   import Loader2 from 'lucide-svelte/icons/loader-2'
@@ -12,11 +12,11 @@
   import X from 'lucide-svelte/icons/x'
   import { appStore } from '../store/appStore'
   import { resolveVersionPresentation } from '../config/versionCatalog'
-  import { t } from '../i18n'
   import bannerUrl from '../assets/Banner.png'
 
   const {
     launch,
+    stopClient,
     applyConfigPatch,
     selectAccount,
     removeAccount,
@@ -28,14 +28,15 @@
   $: config = state.config
   $: clientState = state.clientState
   $: launching = state.launching
+  $: clientRunning = state.clientRunning
   $: launcherStatus = state.launcherStatus
-  $: playStatusLabel = noAccountSelected ? $t('home.status.accountRequired') : launcherStatus
   $: update = state.update
   $: updateStatus = update.status
   $: accountsState = $appStore.accounts
   $: activeAccount = accountsState.entries.find((entry) => entry.id === accountsState.activeAccountId)
   $: noAccountSelected = !activeAccount
   $: canAddMore = accountsState.entries.length < accountsState.limit
+  $: isUpdating = updateStatus !== 'completed'
 
   function minotarHead(id?: string | null, size = 96): string {
     const safeId = id && id.trim() ? id : 'Steve'
@@ -47,22 +48,41 @@
     return minotarHead(account.uuid || account.username, size)
   }
 
+  function currentLanguage(conf: LauncherConfig | null): 'pt' | 'en' {
+    return conf?.language === 'pt' ? 'pt' : 'en'
+  }
+
+  function makeVersionLabel(entry: VersionCatalogEntry): string {
+    return `SHINDO ${entry.minecraftVersion}`
+  }
+
+  function cardBackground(entry: VersionCatalogEntry): string {
+    const gradient = 'linear-gradient(135deg, rgba(17, 24, 39, 0.55), rgba(2, 6, 23, 0.9))'
+    const img = entry.bannerUrl || bannerUrl
+    return `${gradient}, url(${img})`
+  }
+
   $: avatarUrl = accountAvatar(activeAccount)
-  $: versionPresentation = resolveVersionPresentation(clientState)
+  $: selectedVersionId = config?.versionId ?? clientState?.versionId ?? 'ShindoClient'
+  $: selectedVersionPresentation = resolveVersionPresentation(clientState)
+  $: versionCatalog = state.versionCatalog
+  $: versionCards = versionCatalog?.entries ?? []
+  $: selectedVersionMeta =
+    versionCards.find((entry) => entry.id === selectedVersionId) ||
+    versionCards.find((entry) => entry.id === versionCatalog?.defaultVersionId) ||
+    null
+  $: selectedBuildValue = config?.selectedBuild ?? null
+  $: buildOptions = selectedVersionMeta?.builds ?? []
+  $: selectedBuildOption =
+    buildOptions.find((entry) => entry.build === selectedBuildValue) ||
+    buildOptions[0] ||
+    null
+  $: versionBannerBackground = selectedVersionMeta?.bannerUrl || bannerUrl
 
-  $: versionOptions = clientState
-    ? [{ id: clientState.versionId, label: versionPresentation.optionLabel }]
-    : []
-  $: selectedVersionId = config?.versionId ?? clientState?.versionId ?? ''
-  $: selectedVersionLabel =
-    versionOptions.find((option) => option.id === selectedVersionId)?.label ?? $t('home.selectVersion')
-
-  $: playDisabled = launching || updateStatus !== 'completed' || noAccountSelected
-
-  let versionMenuOpen = false
   let accountMenuOpen = false
-  let versionDropdownRef: HTMLDivElement | null = null
+  let versionPanelOpen = false
   let accountDropdownRef: HTMLDivElement | null = null
+  let versionPanelRef: HTMLDivElement | null = null
   let addPanelOpen = false
   let addPanelMode: 'options' | 'offline' = 'options'
   let offlineName = ''
@@ -71,38 +91,20 @@
   onMount(() => {
     const handleClick = (event: MouseEvent) => {
       const target = event.target as Node
-      if (versionDropdownRef && !versionDropdownRef.contains(target)) {
-        versionMenuOpen = false
-      }
       if (accountDropdownRef && !accountDropdownRef.contains(target)) {
         accountMenuOpen = false
+      }
+      if (versionPanelRef && !versionPanelRef.contains(target)) {
+        versionPanelOpen = false
       }
     }
     window.addEventListener('click', handleClick)
     return () => window.removeEventListener('click', handleClick)
   })
 
-  function toggleVersionMenu(event: MouseEvent) {
-    event.stopPropagation()
-    versionMenuOpen = !versionMenuOpen
-    if (versionMenuOpen) {
-      accountMenuOpen = false
-    }
-  }
-
   function toggleAccountMenu(event: MouseEvent) {
     event.stopPropagation()
     accountMenuOpen = !accountMenuOpen
-    if (accountMenuOpen) {
-      versionMenuOpen = false
-    }
-  }
-
-  async function selectVersion(optionId: string) {
-    versionMenuOpen = false
-    if (optionId !== selectedVersionId) {
-      await applyConfigPatch({ versionId: optionId })
-    }
   }
 
   async function handleSelectAccount(accountId: string) {
@@ -149,13 +151,6 @@
     offlineName = ''
   }
 
-  function handlePanelOverlayKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      closeAddPanel()
-    }
-  }
-
   async function handleMicrosoftLogin() {
     if (!canAddMore) return
     closeAddPanel()
@@ -178,7 +173,86 @@
     }
   }
 
-  function handlePlay() {
+  function handlePanelOverlayKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      closeAddPanel()
+    }
+  }
+
+  async function handleVersionSelect(versionId: string) {
+    if (versionId === selectedVersionId) {
+      versionPanelOpen = false
+      return
+    }
+    versionPanelOpen = false
+    const target = versionCards.find((entry) => entry.id === versionId)
+    const nextBuild = target?.builds?.[0]?.build ?? null
+    await applyConfigPatch({ versionId, selectedBuild: nextBuild })
+  }
+
+  async function handleBuildSelect(event: Event) {
+    const value = Number((event.target as HTMLSelectElement).value)
+    const nextBuild = Number.isFinite(value) && value > 0 ? value : null
+    await applyConfigPatch({ selectedBuild: nextBuild })
+  }
+
+  function normalizeStatusText(input: string): string {
+    const text = (input || '').trim()
+    if (!text) return ''
+    if (text.length > 30) {
+      return `${text.slice(0, 30).toUpperCase()}...`
+    }
+    return text.toUpperCase()
+  }
+
+  $: language = currentLanguage(config)
+  $: readyLabel = language === 'pt' ? 'INICIAR JOGO' : 'START GAME'
+  $: stopLabel = language === 'pt' ? 'PARAR' : 'CLOSE'
+
+  $: updateLabel = (() => {
+    const msg = (update.message || '').toLowerCase()
+    if (language === 'pt') {
+      if (msg.includes('baixando') || msg.includes('download')) return 'BAIXANDO...'
+      if (msg.includes('sincronizando') || msg.includes('sync')) return 'SINCRONIZANDO...'
+      if (msg.includes('java') || msg.includes('runtime')) return 'PREPARANDO JAVA...'
+      if (msg.includes('launcher')) return 'ATUALIZANDO LAUNCHER...'
+      return 'ATUALIZANDO...'
+    }
+    if (msg.includes('baixando') || msg.includes('download')) return 'DOWNLOADING...'
+    if (msg.includes('sincronizando') || msg.includes('sync')) return 'SYNCING...'
+    if (msg.includes('java') || msg.includes('runtime')) return 'PREPARING JAVA...'
+    if (msg.includes('launcher')) return 'UPDATING LAUNCHER...'
+    return 'UPDATING...'
+  })()
+
+  $: launchButtonLabel = (() => {
+    if (clientRunning) return stopLabel
+    if (launching) return language === 'pt' ? 'INICIANDO...' : 'LAUNCHING...'
+    if (isUpdating) return updateLabel
+    if (noAccountSelected) return language === 'pt' ? 'SELECIONE UMA CONTA' : 'SELECT AN ACCOUNT'
+    return readyLabel
+  })()
+
+  $: launchButtonClass = (() => {
+    if (clientRunning) return 'state-running'
+    if (isUpdating) return 'state-updating'
+    if (launching) return 'state-launching'
+    if (noAccountSelected) return 'state-disabled'
+    return 'state-ready'
+  })()
+
+  $: launchButtonDisabled = (!clientRunning && (isUpdating || launching || noAccountSelected))
+  $: launchHint = clientRunning
+    ? normalizeStatusText(launcherStatus)
+    : normalizeStatusText(selectedBuildOption?.label || selectedVersionPresentation.optionLabel)
+
+  async function handleLaunchPrimaryAction() {
+    if (clientRunning) {
+      await stopClient()
+      return
+    }
+    if (launchButtonDisabled) return
     launch().catch(() => undefined)
   }
 </script>
@@ -263,76 +337,81 @@
     {/if}
   </div>
 
-  <div class="launch-area">
-    <div class="banner-background">
-      <img src={bannerUrl} alt="Banner" class="banner-image" />
-      <div class="banner-overlay"></div>
-    </div>
+  <div class="hero-space" />
 
-    <button
-      type="button"
-      class="launch-button"
-      on:click={handlePlay}
-      disabled={playDisabled}
-    >
-      <div class="launch-content">
-        <span class="launch-text">{launching ? 'LAUNCHING...' : 'LAUNCH'}</span>
-        <div class="version-selector-inline" bind:this={versionDropdownRef}>
-          <button
-            type="button"
-            class="version-button-inline"
-            on:click={(event) => {
-              event.stopPropagation()
-              toggleVersionMenu(event)
-            }}
-          >
-            <span>{selectedVersionLabel}</span>
-            <ChevronDown class={`chevron-inline ${versionMenuOpen ? 'open' : ''}`} />
-          </button>
+  {#if accountsState.error}
+    <div class="status-chip status-chip-error">
+      <AlertTriangle class="status-chip-icon" />
+      <span>{accountsState.error}</span>
+    </div>
+  {/if}
+
+  <div class="launcher-bar-wrap" bind:this={versionPanelRef}>
+    {#if versionPanelOpen}
+      <div class="version-selector-panel">
+        {#if selectedVersionMeta && selectedVersionMeta.builds.length > 0}
+          <div class="version-build-toolbar">
+            <span class="version-build-label">Build</span>
+            <select class="version-build-select" value={selectedBuildOption?.build ?? ''} on:change={handleBuildSelect}>
+              {#each selectedVersionMeta.builds as build}
+                <option value={build.build}>
+                  {build.label} ({build.build})
+                </option>
+              {/each}
+            </select>
+          </div>
+        {/if}
+        <div class="version-grid">
+          {#each versionCards as version, index}
+            <button
+              type="button"
+              class={`version-card ${selectedVersionId === version.id ? 'selected' : ''}`}
+              style={`background-image: ${cardBackground(version)}; --card-idx:${index};`}
+              on:click={() => handleVersionSelect(version.id)}
+            >
+              <span class="version-card-label">{makeVersionLabel(version)}</span>
+              {#if version.latestBuild}
+                <span class="version-card-build">BUILD {version.latestBuild}</span>
+              {/if}
+            </button>
+          {/each}
         </div>
       </div>
-      <div class="launch-icon">
-        <Play class="play-icon" />
-      </div>
-    </button>
-
-    {#if versionOptions.length > 0 && versionMenuOpen}
-      <div class="version-dropdown-external">
-        {#each versionOptions as option}
-          <button
-            type="button"
-            class="version-option"
-            on:click={() => selectVersion(option.id)}
-          >
-            <span>{option.label}</span>
-            {#if option.id === selectedVersionId}
-              <span class="active-badge">ACTIVE</span>
-            {/if}
-          </button>
-        {/each}
-      </div>
     {/if}
 
-    {#if updateStatus !== 'completed'}
-      <div class="update-status">
-        <div class="pulse-dot"></div>
-        <span>UPDATE IN PROGRESS...</span>
+    <div class="version-banner" style={`background-image: linear-gradient(180deg, rgba(2, 6, 23, 0.12), rgba(2, 6, 23, 0.72)), url(${versionBannerBackground});`}>
+      <div class="version-banner-content">
+        <span class="version-banner-name">{selectedVersionMeta?.name || 'Shindo Client'}</span>
+        <span class="version-banner-meta">
+          MC {selectedVersionMeta?.minecraftVersion || selectedVersionPresentation.baseVersion}
+          {#if selectedBuildOption}
+            {' · '}BUILD {selectedBuildOption.build}
+          {/if}
+        </span>
       </div>
-    {/if}
+    </div>
 
-    {#if playStatusLabel && !accountsState.loading && state.accounts.error === undefined && noAccountSelected}
-      <div class="account-warning">
-        <AlertTriangle class="account-warning-icon" />
-        <span>{playStatusLabel}</span>
-      </div>
-    {/if}
+    <div class="launcher-bar">
+      <button
+        type="button"
+        class={`launch-button ${launchButtonClass}`}
+        on:click={handleLaunchPrimaryAction}
+        disabled={launchButtonDisabled}
+      >
+        <span class="launch-main-text">{launchButtonLabel}</span>
+        <span class="launch-sub-text">{launchHint}</span>
+      </button>
 
-    {#if accountsState.error}
-      <div class="account-error">
-        <AlertTriangle class="account-warning-icon" />
-        <span>{accountsState.error}</span>
-      </div>
-    {/if}
+      <button
+        type="button"
+        class="version-toggle"
+        on:click|stopPropagation={() => (versionPanelOpen = !versionPanelOpen)}
+        aria-label="Open version selector"
+        title="Version selector"
+      >
+        <ChevronUp class="version-toggle-icon" />
+      </button>
+    </div>
   </div>
 
   {#if addPanelOpen}
@@ -408,18 +487,22 @@
   .home-container {
     width: 100%;
     height: 100%;
-    background: #000000;
+    background: radial-gradient(circle at 20% 10%, rgba(59, 130, 246, 0.08), transparent 42%), #05070f;
     display: flex;
     flex-direction: column;
     position: relative;
     overflow: hidden;
   }
 
+  .hero-space {
+    flex: 1;
+  }
+
   .account-section {
     position: absolute;
     top: 20px;
     right: 30px;
-    z-index: 20;
+    z-index: 30;
   }
 
   .account-toggle {
@@ -433,12 +516,6 @@
     padding: 8px 14px;
     color: #ffffff;
     cursor: pointer;
-    transition: background 0.2s ease, border-color 0.2s ease;
-  }
-
-  .account-toggle:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.25);
   }
 
   .account-avatar {
@@ -480,8 +557,6 @@
     width: 16px;
     height: 16px;
     color: #d1d5db;
-    transition: transform 0.2s ease;
-    flex-shrink: 0;
   }
 
   .account-chevron.open {
@@ -533,11 +608,6 @@
     padding: 8px 10px;
     color: #ffffff;
     cursor: pointer;
-    transition: background 0.2s ease, border-color 0.2s ease;
-  }
-
-  .account-option:hover {
-    background: rgba(255, 255, 255, 0.08);
   }
 
   .account-option.active {
@@ -584,14 +654,8 @@
     color: #fca5a5;
     border-radius: 8px;
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     font-size: 11px;
     font-weight: 700;
-  }
-
-  .account-remove:hover {
-    background: rgba(239, 68, 68, 0.2);
-    color: #fecaca;
   }
 
   .account-remove.confirm {
@@ -620,12 +684,6 @@
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease;
-  }
-
-  .account-add-option:hover:not(:disabled) {
-    background: rgba(34, 197, 94, 0.24);
-    color: #bbf7d0;
   }
 
   .account-add-option:disabled {
@@ -638,219 +696,260 @@
     height: 14px;
   }
 
-  .launch-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    position: relative;
-    padding: 80px 40px 40px 40px;
-  }
-
-  .banner-background {
+  .status-chip {
     position: absolute;
-    width: 1000px;
-    height: 250px;
-    border-radius: 20px;
-    overflow: hidden;
-    z-index: 1;
-  }
-
-  .banner-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .banner-overlay {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.7));
-  }
-
-  .launch-button {
-    position: relative;
-    z-index: 2;
-    width: 400px;
-    height: 80px;
-    background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
-    border: none;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 30px;
-    cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: 0 8px 30px rgba(0, 255, 136, 0.3);
-  }
-
-  .launch-button:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 40px rgba(0, 255, 136, 0.4);
-  }
-
-  .launch-button:active:not(:disabled) {
-    transform: translateY(0);
-  }
-
-  .launch-button:disabled {
-    background: linear-gradient(135deg, #333333 0%, #222222 100%);
-    cursor: not-allowed;
-    box-shadow: none;
-  }
-
-  .launch-content {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .launch-text {
-    font-size: 28px;
-    font-weight: 800;
-    color: #000000;
-    letter-spacing: 1px;
-  }
-
-  .version-selector-inline {
-    display: flex;
-    align-items: center;
-  }
-
-  .version-button-inline {
-    background: rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    border-radius: 6px;
-    padding: 4px 10px;
-    color: rgba(0, 0, 0, 0.7);
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s;
-  }
-
-  .version-button-inline:hover {
-    background: rgba(0, 0, 0, 0.15);
-  }
-
-  .chevron-inline {
-    width: 12px;
-    height: 12px;
-    transition: transform 0.2s;
-  }
-
-  .chevron-inline.open {
-    transform: rotate(180deg);
-  }
-
-  .launch-icon {
-    width: 50px;
-    height: 50px;
-    background: rgba(0, 0, 0, 0.15);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .play-icon {
-    width: 24px;
-    height: 24px;
-    color: #000000;
-  }
-
-  .version-dropdown-external {
-    position: absolute;
-    top: 160px;
-    z-index: 3;
-    width: 300px;
-    background: #1a1a1a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-  }
-
-  .version-option {
-    width: 100%;
-    background: none;
-    border: none;
-    padding: 12px 20px;
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    transition: background 0.2s;
-  }
-
-  .version-option:hover {
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .active-badge {
-    font-size: 10px;
-    font-weight: 700;
-    color: #00ff88;
-  }
-
-  .update-status {
-    position: absolute;
-    bottom: 30px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(255, 165, 0, 0.1);
-    border: 1px solid rgba(255, 165, 0, 0.3);
-    border-radius: 8px;
-    padding: 12px 24px;
-    color: #ffaa00;
-    font-size: 12px;
-    font-weight: 600;
-    z-index: 3;
-  }
-
-  .account-warning,
-  .account-error {
-    position: absolute;
-    left: 30px;
-    display: flex;
+    left: 28px;
+    top: 26px;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
+    padding: 10px 12px;
     border-radius: 8px;
-    padding: 10px 14px;
     font-size: 12px;
-    font-weight: 600;
-    z-index: 3;
-    max-width: 420px;
+    font-weight: 700;
+    z-index: 20;
   }
 
-  .account-warning {
-    top: 24px;
-    background: rgba(245, 158, 11, 0.13);
-    border: 1px solid rgba(245, 158, 11, 0.35);
-    color: #fbbf24;
-  }
-
-  .account-error {
-    top: 64px;
+  .status-chip-error {
     background: rgba(239, 68, 68, 0.14);
     border: 1px solid rgba(239, 68, 68, 0.35);
     color: #fca5a5;
   }
 
-  .account-warning-icon {
+  .status-chip-icon {
     width: 14px;
     height: 14px;
-    flex-shrink: 0;
+  }
+
+  .launcher-bar-wrap {
+    position: absolute;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    width: min(940px, calc(100% - 90px));
+    z-index: 25;
+  }
+
+  .version-banner {
+    height: 152px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background-size: cover;
+    background-position: center;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    box-shadow: 0 20px 36px rgba(0, 0, 0, 0.38);
+  }
+
+  .version-banner-content {
+    width: 100%;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    background: linear-gradient(180deg, rgba(2, 6, 23, 0), rgba(2, 6, 23, 0.75));
+  }
+
+  .version-banner-name {
+    font-size: 18px;
+    font-weight: 800;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .version-banner-meta {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(229, 231, 235, 0.92);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .launcher-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .launch-button {
+    flex: 1;
+    min-height: 76px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+    transition: transform 0.18s ease, filter 0.18s ease, opacity 0.2s ease;
+  }
+
+  .launch-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    filter: saturate(1.05);
+  }
+
+  .launch-main-text {
+    font-family: 'Poppins', sans-serif;
+    font-size: 34px;
+    line-height: 1;
+    font-weight: 800;
+    color: #ffffff;
+  }
+
+  .launch-sub-text {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.86);
+    letter-spacing: 0.05em;
+  }
+
+  .launch-button.state-ready {
+    background: linear-gradient(135deg, #1fe673 0%, #13be67 100%);
+  }
+
+  .launch-button.state-updating {
+    background: linear-gradient(135deg, #7b3ff2 0%, #5b25cd 100%);
+  }
+
+  .launch-button.state-launching {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  }
+
+  .launch-button.state-running {
+    background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  }
+
+  .launch-button.state-disabled {
+    background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  .version-toggle {
+    width: 56px;
+    min-width: 56px;
+    height: 76px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 12px;
+    background: rgba(13, 18, 36, 0.92);
+    color: #e5e7eb;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .version-toggle-icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .version-selector-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 92px;
+    background: rgba(8, 12, 26, 0.97);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 24px 40px rgba(0, 0, 0, 0.45);
+    max-height: min(62vh, 520px);
+    overflow: auto;
+  }
+
+  .version-build-toolbar {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .version-build-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9ca3af;
+    font-weight: 700;
+  }
+
+  .version-build-select {
+    min-width: 240px;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    color: #e5e7eb;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 7px 10px;
+    outline: none;
+  }
+
+  .version-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .version-card {
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 14px;
+    min-height: 118px;
+    overflow: hidden;
+    cursor: pointer;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 0 200px rgba(10, 15, 30, 0.22);
+  }
+
+  .version-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    backdrop-filter: contrast(0.9) saturate(1.2);
+    opacity: 0.55;
+  }
+
+  .version-card-label {
+    position: relative;
+    z-index: 1;
+    font-size: 38px;
+    line-height: 1;
+    font-weight: 800;
+    color: #ffffff;
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
+  }
+
+  .version-card-build {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    z-index: 1;
+    color: #f3f4f6;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .version-card.selected {
+    border-color: rgba(34, 197, 94, 0.85);
+    box-shadow:
+      inset 0 0 0 2px rgba(34, 197, 94, 0.55),
+      0 0 0 1px rgba(34, 197, 94, 0.45);
   }
 
   .panel-overlay {
@@ -889,12 +988,6 @@
     height: 30px;
     border-radius: 6px;
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease;
-  }
-
-  .panel-close:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #f3f4f6;
   }
 
   .panel-close-icon {
@@ -934,7 +1027,6 @@
     font-size: 14px;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s ease;
   }
 
   .panel-action.microsoft {
@@ -942,17 +1034,9 @@
     border-color: rgba(34, 197, 94, 0.38);
   }
 
-  .panel-action.microsoft:hover:not(:disabled) {
-    background: rgba(34, 197, 94, 0.24);
-  }
-
   .panel-action.offline {
     background: rgba(59, 130, 246, 0.17);
     border-color: rgba(59, 130, 246, 0.38);
-  }
-
-  .panel-action.offline:hover {
-    background: rgba(59, 130, 246, 0.25);
   }
 
   .panel-action:disabled {
@@ -987,11 +1071,6 @@
     box-sizing: border-box;
   }
 
-  .offline-input:focus {
-    border-color: rgba(96, 165, 250, 0.75);
-    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
-  }
-
   .offline-form-actions {
     display: flex;
     justify-content: flex-end;
@@ -1006,7 +1085,6 @@
     font-weight: 700;
     padding: 10px 14px;
     cursor: pointer;
-    transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
   }
 
   .secondary-btn {
@@ -1014,17 +1092,9 @@
     color: #d1d5db;
   }
 
-  .secondary-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-  }
-
   .primary-btn {
     background: #2563eb;
     color: #ffffff;
-  }
-
-  .primary-btn:hover:not(:disabled) {
-    background: #1d4ed8;
   }
 
   .primary-btn:disabled {
@@ -1032,23 +1102,55 @@
     cursor: not-allowed;
   }
 
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
+  @media (max-width: 1180px) {
+    .version-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    to {
-      transform: rotate(360deg);
+
+    .version-card-label {
+      font-size: 32px;
     }
   }
 
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 1;
-      transform: scale(1);
+  @media (max-width: 880px) {
+    .launcher-bar-wrap {
+      width: calc(100% - 32px);
+      bottom: 14px;
     }
-    50% {
-      opacity: 0.5;
-      transform: scale(1.2);
+
+    .version-banner {
+      height: 124px;
     }
+
+    .version-banner-name {
+      font-size: 15px;
+    }
+
+    .version-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .version-build-toolbar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .version-build-select {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .launch-main-text {
+      font-size: 24px;
+    }
+
+    .launch-sub-text {
+      font-size: 10px;
+    }
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 </style>

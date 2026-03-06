@@ -11,6 +11,7 @@ import type {
   LaunchExitPayload,
   AccountsStatePayload,
   AccountProfile,
+  VersionCatalogPayload,
 } from '@shindo/shared'
 
 type Screen = 'update' | 'home' | 'settings'
@@ -37,6 +38,7 @@ interface AppState {
   updateInFlight: boolean
   listenersRegistered: boolean
   launching: boolean
+  clientRunning: boolean
   launcherStatus: string
   accounts: {
     entries: AccountProfile[]
@@ -46,6 +48,8 @@ interface AppState {
     loginInProgress: boolean
     error?: string
   }
+  versionCatalog: VersionCatalogPayload | null
+  versionCatalogLoading: boolean
 }
 
 const initialState: AppState = {
@@ -65,6 +69,7 @@ const initialState: AppState = {
   updateInFlight: false,
   listenersRegistered: false,
   launching: false,
+  clientRunning: false,
   launcherStatus: get(t)('home.status.preparing'),
   accounts: {
     entries: [],
@@ -73,6 +78,8 @@ const initialState: AppState = {
     loading: false,
     loginInProgress: false,
   },
+  versionCatalog: null,
+  versionCatalogLoading: false,
 }
 function applyAccountsPayload(state: AppState, payload: AccountsStatePayload): AppState {
   return {
@@ -285,6 +292,21 @@ async function refreshClientState(): Promise<void> {
   }
 }
 
+async function refreshVersionCatalog(): Promise<void> {
+  store.update((state) => ({ ...state, versionCatalogLoading: true }))
+  try {
+    const payload = await window.shindo.getVersionCatalog()
+    store.update((state) => ({
+      ...state,
+      versionCatalog: payload,
+      versionCatalogLoading: false,
+    }))
+  } catch (error) {
+    console.error('Failed to load version catalog', error)
+    store.update((state) => ({ ...state, versionCatalogLoading: false }))
+  }
+}
+
 function handleUpdateProgress(payload: UpdateProgressPayload): void {
   const localizedMessage = localizeUpdateMessage(payload.message, payload.step)
   store.update((state) => ({
@@ -342,6 +364,7 @@ function appendExitLog(payload: LaunchExitPayload): void {
     : translate('home.status.exit', { code: payload.code })
   store.update((state) => ({
     ...state,
+    clientRunning: false,
     launcherStatus: exitMessage,
   }))
 }
@@ -427,7 +450,7 @@ async function launch(): Promise<void> {
     }))
     return
   }
-  if (current.launching) {
+  if (current.launching || current.clientRunning) {
     console.log('[DEBUG] Already launching, skipping')
     return
   }
@@ -452,6 +475,7 @@ async function launch(): Promise<void> {
     const options = config
       ? {
           memory: { max: `${Math.max(1, config.ramGB)}G` },
+          build: config.selectedBuild ?? null,
         }
       : undefined
 
@@ -462,7 +486,7 @@ async function launch(): Promise<void> {
     const summary = result.pid
       ? translate('home.status.startedPid', { pid: result.pid })
       : translate('home.status.started')
-    store.update((state) => ({ ...state, launcherStatus: summary }))
+    store.update((state) => ({ ...state, launcherStatus: summary, clientRunning: Boolean(result.pid) }))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error('[DEBUG] Failed to launch client', error)
@@ -473,6 +497,26 @@ async function launch(): Promise<void> {
   }
 
   store.update((state) => ({ ...state, launching: false }))
+}
+
+async function stopClient(): Promise<boolean> {
+  try {
+    const stopped = await window.shindo.stopClient()
+    if (stopped) {
+      store.update((state) => ({
+        ...state,
+        launcherStatus: state.config?.language === 'pt' ? 'Encerrando cliente...' : 'Stopping client...',
+      }))
+    }
+    return stopped
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    store.update((state) => ({
+      ...state,
+      launcherStatus: translate('home.status.failed', { message }),
+    }))
+    return false
+  }
 }
 
 export const appStore = {
@@ -499,6 +543,7 @@ export const appStore = {
     }
 
     await refreshClientState()
+    await refreshVersionCatalog()
     try {
       await refreshAccounts()
     } catch (error) {
@@ -512,6 +557,7 @@ export const appStore = {
   applyConfigPatch,
   startUpdate,
   launch,
+  stopClient,
   reloadAccounts: refreshAccounts,
   addOfflineAccount,
   addMicrosoftAccount,

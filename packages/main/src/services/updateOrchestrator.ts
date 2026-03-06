@@ -111,7 +111,11 @@ export async function runStartupUpdateSequence(service: LauncherService): Promis
       message: 'Sincronizando cliente Shindo...',
       percent: 15,
       action: async () => {
-        clientState = await service.ensureClientUpToDate();
+        const config = loadConfig();
+        clientState = await service.ensureClientUpToDate({
+          versionId: config.versionId,
+          build: config.selectedBuild,
+        });
       },
     });
 

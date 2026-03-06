@@ -9,6 +9,7 @@ export const enum IpcChannel {
   SystemMemory = 'shindo:system.memory',
   RunStartupUpdate = 'shindo:update.run',
   LaunchStart = 'shindo:launch.start',
+  LaunchStop = 'shindo:launch.stop',
   WindowMinimize = 'shindo:window.minimize',
   WindowClose = 'shindo:window.close',
   AppVersion = 'shindo:app.version',
@@ -21,6 +22,7 @@ export const enum IpcChannel {
   LogWindowClose = 'shindo:logs.close',
   LaunchLogHistory = 'shindo:launch.log-history',
   LaunchLogClear = 'shindo:launch.log-clear',
+  VersionCatalog = 'shindo:catalog.versions',
 }
 
 export const enum IpcEvent {
@@ -66,6 +68,34 @@ export interface ClientStatePayload {
   assetsIndex?: string | null;
 }
 
+export interface VersionBuildCatalogEntry {
+  build: number;
+  semver: string | null;
+  label: string;
+  packageUrl: string | null;
+  versionUrl: string | null;
+  versionJsonPath: string | null;
+  releasedAt: string | null;
+}
+
+export interface VersionCatalogEntry {
+  id: string;
+  name: string;
+  minecraftVersion: string;
+  bannerUrl: string | null;
+  assetsIndex: string | null;
+  baseVersion: string | null;
+  latestBuild: number | null;
+  latestSemver: string | null;
+  builds: VersionBuildCatalogEntry[];
+}
+
+export interface VersionCatalogPayload {
+  updatedAt: string | null;
+  defaultVersionId: string;
+  entries: VersionCatalogEntry[];
+}
+
 export interface ClientUpdatePayload extends ClientStatePayload {
   updated: boolean;
   release?: ReleaseInfo;
@@ -95,6 +125,7 @@ export interface LaunchClientOptionsPayload {
   customArgs?: string[];
   customLaunchArgs?: string[];
   versionId?: string;
+  build?: number | null;
 }
 
 export interface LaunchClientResultPayload {
@@ -104,11 +135,12 @@ export interface LaunchClientResultPayload {
 }
 
 export interface LauncherBridge {
-  ensureClientUpToDate(options?: { force?: boolean }): Promise<ClientUpdatePayload>;
+  ensureClientUpToDate(options?: { force?: boolean; versionId?: string; build?: number | null }): Promise<ClientUpdatePayload>;
   getClientState(): Promise<ClientStatePayload>;
   checkLauncherUpdate(): Promise<LauncherUpdateInfoPayload>;
   downloadLauncherUpdate(): Promise<LauncherUpdateResultPayload>;
   launchClient(options?: LaunchClientOptionsPayload): Promise<LaunchClientResultPayload>;
+  stopClient(): Promise<boolean>;
   getConfig(): Promise<LauncherConfig>;
   setConfig(patch: Partial<LauncherConfig>): Promise<LauncherConfig>;
   getSystemMemory(): Promise<SystemMemoryInfo>;
@@ -119,6 +151,7 @@ export interface LauncherBridge {
   closeLogWindow(): Promise<void>;
   getLaunchLogs(): Promise<LaunchLogEntry[]>;
   clearLaunchLogs(): Promise<void>;
+  getVersionCatalog(): Promise<VersionCatalogPayload>;
   getVersion(): Promise<string>;
   getAccounts(): Promise<AccountsStatePayload>;
   addOfflineAccount(payload: OfflineAccountRequestPayload): Promise<AccountsStatePayload>;
@@ -134,10 +167,13 @@ export interface LauncherBridge {
 
 export interface LauncherConfig {
   ramGB: number;
-  jrePreference: 'zulu' | 'temurin' | 'system';
+  jrePreference: 'zulu' | 'temurin' | 'liberica' | 'system';
+  javaVersion: 8 | 11 | 17 | 21;
+  javaPackage: 'jre' | 'jdk' | 'jdk-full';
   jrePath?: string;
   jvmArgs: string;
   versionId: string;
+  selectedBuild?: number | null;
   showLogsOnLaunch: boolean;
   language: 'en' | 'pt';
 }

@@ -8,8 +8,11 @@ const CONFIG_FILE = path.join(getBaseDataDir(), 'config.json');
 const DEFAULT_CONFIG: LauncherConfig = {
   ramGB: 4,
   jrePreference: 'system',
+  javaVersion: 8,
+  javaPackage: 'jre',
   jvmArgs: '',
   versionId: 'ShindoClient',
+  selectedBuild: null,
   showLogsOnLaunch: true,
   language: 'en',
 };

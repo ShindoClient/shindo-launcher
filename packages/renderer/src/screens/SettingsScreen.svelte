@@ -17,12 +17,16 @@
   let jvmArgsDraft = config?.jvmArgs ?? ''
   let showLogsOnLaunch = config?.showLogsOnLaunch ?? true
   let language: Language = config?.language ?? 'en'
+  let javaVersion = config?.javaVersion ?? 8
+  let javaPackage: LauncherConfig['javaPackage'] = config?.javaPackage ?? 'jre'
   let savingJvmArgs = false
 
   $: if (config) {
     ramValue = config.ramGB
     showLogsOnLaunch = config.showLogsOnLaunch
     language = (config.language as Language) ?? 'en'
+    javaVersion = config.javaVersion ?? 8
+    javaPackage = config.javaPackage ?? 'jre'
     if (!savingJvmArgs) {
       jvmArgsDraft = config.jvmArgs ?? ''
     }
@@ -46,6 +50,26 @@
     const value = (event.target as HTMLSelectElement).value as LauncherConfig['jrePreference']
     try {
       await applyConfigPatch({ jrePreference: value })
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  async function handleJavaVersionChange(event: Event) {
+    const value = Number((event.target as HTMLSelectElement).value) as LauncherConfig['javaVersion']
+    javaVersion = value
+    try {
+      await applyConfigPatch({ javaVersion: value })
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  async function handleJavaPackageChange(event: Event) {
+    const value = (event.target as HTMLSelectElement).value as LauncherConfig['javaPackage']
+    javaPackage = value
+    try {
+      await applyConfigPatch({ javaPackage: value })
     } catch (error) {
       console.error(error)
     }
@@ -142,7 +166,39 @@
           <option value="system">System JRE</option>
           <option value="zulu">Azul Zulu</option>
           <option value="temurin">Eclipse Temurin</option>
+          <option value="liberica">BellSoft Liberica</option>
         </select>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <div class="mb-2 text-xs text-gray-400 uppercase tracking-[0.08em]">Java Version</div>
+            <select
+              class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60"
+              value={javaVersion}
+              on:change={handleJavaVersionChange}
+              disabled={(config?.jrePreference || 'system') === 'system'}
+            >
+              <option value="8">Java 8</option>
+              <option value="11">Java 11</option>
+              <option value="17">Java 17</option>
+              <option value="21">Java 21</option>
+            </select>
+          </div>
+
+          <div>
+            <div class="mb-2 text-xs text-gray-400 uppercase tracking-[0.08em]">Package</div>
+            <select
+              class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60"
+              value={javaPackage}
+              on:change={handleJavaPackageChange}
+              disabled={(config?.jrePreference || 'system') === 'system'}
+            >
+              <option value="jre">JRE</option>
+              <option value="jdk">JDK</option>
+              <option value="jdk-full">JDK Full</option>
+            </select>
+          </div>
+        </div>
         
         {#if config?.jrePath}
           <div class="mt-4 p-3 bg-gray-800/30 rounded-lg">

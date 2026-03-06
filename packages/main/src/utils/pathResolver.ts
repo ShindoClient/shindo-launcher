@@ -37,8 +37,8 @@ export function getVersionsDir(): string {
   return ensureDir(path.join(getBaseDataDir(), 'versions'));
 }
 
-export function getClientDir(): string {
-  return ensureDir(path.join(getVersionsDir(), 'ShindoClient'));
+export function getClientDir(versionId = 'ShindoClient'): string {
+  return ensureDir(path.join(getVersionsDir(), versionId));
 }
 
 export function getLauncherCacheDir(): string {

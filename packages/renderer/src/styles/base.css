@@ -1,0 +1,140 @@
+@layer base {
+  * {
+    font-family: var(--font-primary);
+    transition:
+      background-color var(--duration-normal) var(--timing-default),
+      border-color var(--duration-fast) var(--timing-default),
+      color var(--duration-fast) var(--timing-default),
+      transform var(--duration-fast) var(--timing-default);
+  }
+
+  html,
+  body,
+  #app {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--color-bg-app);
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-weight: 500;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+
+  p,
+  span,
+  div {
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+
+  button {
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  ::selection {
+    background-color: rgba(59, 130, 246, 0.3);
+    color: #fff;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.5);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.7);
+  }
+}
+
+@layer components {
+  .glass-dark {
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-light {
+    background: rgba(30, 30, 30, 0.5);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  .text-gradient-blue {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-gradient-blue {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  }
+
+  .border-gradient-blue {
+    border: 2px solid transparent;
+    background: linear-gradient(#000000, #000000) padding-box,
+      linear-gradient(135deg, #3b82f6, #8b5cf6) border-box;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer utilities {
+  .rounded-bubble {
+    border-radius: var(--radius-md);
+  }
+
+  .rounded-bubble-lg {
+    border-radius: var(--radius-lg);
+  }
+
+  .rounded-bubble-xl {
+    border-radius: var(--radius-xl);
+  }
+
+  .shadow-bubble {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .shadow-bubble-lg {
+    box-shadow: var(--shadow-lg);
+  }
+}

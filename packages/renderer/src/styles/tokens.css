@@ -1,0 +1,23 @@
+:root {
+  --font-primary: 'Nunito', 'Poppins', sans-serif;
+
+  --color-bg-app: #000000;
+  --color-text: #ffffff;
+  --color-muted: #9ca3af;
+  --color-accent: #3b82f6;
+  --color-accent-strong: #2563eb;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --duration-fast: 160ms;
+  --duration-normal: 220ms;
+  --timing-default: ease;
+
+  --shadow-sm: 0 4px 20px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.4);
+
+  --focus-ring: 0 0 0 2px rgba(59, 130, 246, 0.6);
+}
