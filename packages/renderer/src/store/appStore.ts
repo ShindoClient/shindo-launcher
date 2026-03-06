@@ -13,7 +13,7 @@ import type {
   AccountProfile,
 } from '@shindo/shared'
 
-type Screen = 'update' | 'home' | 'settings' | 'accounts'
+type Screen = 'update' | 'home' | 'settings'
 
 type UpdateStatus = 'idle' | 'running' | 'completed' | 'error'
 

@@ -2,17 +2,15 @@
   import { appStore } from '../store/appStore'
   import Home from 'lucide-svelte/icons/home'
   import Settings from 'lucide-svelte/icons/settings'
-  import Users from 'lucide-svelte/icons/users'
 
   const { setScreen } = appStore
 
-  const navItems = [
+  const navItems: Array<{ id: 'home' | 'settings'; label: string; icon: typeof Home; screen: 'home' | 'settings' }> = [
     { id: 'home', label: 'Home', icon: Home, screen: 'home' },
-    { id: 'accounts', label: 'Accounts', icon: Users, screen: 'accounts' },
     { id: 'settings', label: 'Settings', icon: Settings, screen: 'settings' },
   ]
 
-  function handleNavClick(screen: string) {
+  function handleNavClick(screen: 'home' | 'settings') {
     setScreen(screen)
   }
 </script>
@@ -25,22 +23,21 @@
   </div>
 
   <nav class="nav-menu">
-    {#each navItems as item, index}
+    {#each navItems as item}
       <button
         class="nav-item { $appStore.screen === item.screen ? 'selected' : '' }"
         on:click={() => handleNavClick(item.screen)}
         aria-label={item.label}
       >
-        <svelte:component this={item.icon} class="nav-icon" />
-        <!-- Indicator dot -->
+        <span class="nav-icon">
+          <svelte:component this={item.icon} />
+        </span>
         {#if $appStore.screen === item.screen}
           <div class="nav-indicator"></div>
         {/if}
       </button>
     {/each}
   </nav>
-
-
 </div>
 
 <style>
@@ -117,6 +114,14 @@
   }
 
   .nav-icon {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-icon :global(svg) {
     width: 24px;
     height: 24px;
   }

@@ -5,7 +5,6 @@
   import UpdateScreen from './screens/UpdateScreen.svelte'
   import HomeScreen from './screens/HomeScreen.svelte'
   import SettingsScreen from './screens/SettingsScreen.svelte'
-  import AccountsScreen from './screens/AccountsScreen.svelte'
   import Sidebar from './components/Sidebar.svelte'
 
   const { init } = appStore
@@ -26,8 +25,6 @@
         <UpdateScreen />
       {:else if $appStore.screen === 'home'}
         <HomeScreen />
-      {:else if $appStore.screen === 'accounts'}
-        <AccountsScreen />
       {:else}
         <SettingsScreen />
       {/if}
@@ -37,11 +34,11 @@
 
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
-  
+
   :global(*) {
     font-family: 'Poppins', sans-serif;
   }
-  
+
   :global(body) {
     margin: 0;
     padding: 0;
