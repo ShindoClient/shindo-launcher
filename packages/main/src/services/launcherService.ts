@@ -150,16 +150,25 @@ export class LauncherService {
     options?: LaunchClientOptionsPayload,
     callbacks?: LaunchCallbacks,
   ): Promise<LaunchClientResultPayload> {
+    console.log('[LAUNCHER] launchClient called with options:', options);
+    
     let clientState = this.getClientState();
+    console.log('[LAUNCHER] Initial client state:', clientState);
+    
     if (!clientState.versionJsonPath) {
+      console.log('[LAUNCHER] No versionJsonPath, ensuring client is up to date');
       clientState = await this.ensureClientUpToDate();
+      console.log('[LAUNCHER] After ensureClientUpToDate:', clientState);
     }
 
     if (!clientState.versionJsonPath) {
+      console.error('[LAUNCHER] ShindoClient.json not found');
       throw new Error('ShindoClient.json not found. Run the update before launching.');
     }
 
     const config = loadConfig();
+    console.log('[LAUNCHER] Config loaded:', config);
+    
     const root = ensureDataRoot();
     const memory = resolveMemory(config, options?.memory);
     const javaPath = options?.javaPath ?? config.jrePath;
@@ -171,11 +180,24 @@ export class LauncherService {
       ? path.relative(versionsDir, clientState.versionJsonPath).split(path.sep).join('/')
       : undefined;
 
+    console.log('[LAUNCHER] Launch parameters:', {
+      root,
+      memory,
+      javaPath,
+      versionId,
+      versionNumber,
+      assetIndex,
+      versionJsonRelative
+    });
+
     const configJvmArgs = parseJvmArgs(config.jvmArgs);
     const combinedJavaArgs = [...configJvmArgs, ...(options?.customArgs ?? [])];
 
     const accountContext = await accountService.getLaunchContext();
+    console.log('[LAUNCHER] Account context:', accountContext);
+    
     const authorization = await buildAuthorization(accountContext);
+    console.log('[LAUNCHER] Authorization built');
 
     const launcher = new Client();
     const startedAt = Date.now();
@@ -198,9 +220,11 @@ export class LauncherService {
       });
     }
 
+    console.log('[LAUNCHER] Ensuring launch wrapper and libraries');
     await ensureLaunchWrapperJar(root);
     await ensureRequiredLibraries(root);
 
+    console.log('[LAUNCHER] Calling minecraft-launcher-core launch');
     const proc = await launcher.launch({
       root,
       javaPath,
@@ -221,6 +245,8 @@ export class LauncherService {
         assetRoot: path.join(root, 'assets'),
       },
     });
+
+    console.log('[LAUNCHER] Process launched, pid:', proc?.pid);
 
     if (proc && callbacks?.onClose) {
       proc.on('close', (code) => callbacks.onClose?.(code));

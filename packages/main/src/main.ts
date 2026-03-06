@@ -120,11 +120,11 @@ function broadcast(event: IpcEvent, payload: unknown): void {
 
 async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
-    width: 840,
-    height: 600,
-    minWidth: 840,
-    minHeight: 600,
-    resizable: false,
+    width: 1200,
+    height: 720,
+    minWidth: 1000,
+    minHeight: 650,
+    resizable: true,
     title: 'Shindo Launcher',
     show: false,
     frame: false,
@@ -386,6 +386,7 @@ ipcMain.handle(IpcChannel.LaunchLogClear, () => {
 });
 
 ipcMain.handle(IpcChannel.LaunchStart, (_event, options) => {
+  console.log('[MAIN] LaunchStart called with options:', options);
   emitLaunchLog('info', 'Iniciando ShindoClient...');
   return launcherService.launchClient(options, {
     onLog: (message) => emitLaunchLog(classifyLaunchLog(message, 'info'), message),
@@ -400,9 +401,11 @@ ipcMain.handle(IpcChannel.LaunchStart, (_event, options) => {
       ? `Cliente iniciado (pid ${result.pid}).`
       : 'Cliente iniciado.';
     emitLaunchLog('info', summary);
+    console.log('[MAIN] launchClient succeeded:', result);
     return result;
   }).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
+    console.error('[MAIN] launchClient failed:', error);
     emitLaunchLog('error', message);
     throw error;
   });

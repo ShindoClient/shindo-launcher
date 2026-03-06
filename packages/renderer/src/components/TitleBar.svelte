@@ -7,7 +7,7 @@
   import { appStore } from '../store/appStore'
   import { t } from '../i18n'
 
-  const TITLE = 'Shindo Launcher'
+  const TITLE = 'SHINDO LAUNCHER'
   const { setScreen } = appStore
   let versionLabel: string | null = null
 
@@ -39,7 +39,7 @@
 
 <header class="title-bar" role="presentation" on:dblclick|preventDefault|stopPropagation={() => null}>
   <div class="title-left">
-    <img class="logo" src={logoUrl} alt="Logotipo do Shindo Launcher" draggable="false" />
+    <img class="logo" src={logoUrl} alt="Shindo Launcher Logo" draggable="false" />
     <span class="title-text">
       {TITLE}
       {#if versionLabel}
@@ -84,27 +84,26 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 48px;
-    padding: 0 18px;
-    background: linear-gradient(90deg, rgba(30, 41, 59, 0.92) 0%, rgba(15, 23, 42, 0.92) 100%);
-    border-bottom: 1px solid rgba(59, 130, 246, 0.18);
-    color: #e2e8f0;
+    height: 40px;
+    padding: 0 16px;
+    background: #000000;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
     -webkit-app-region: drag;
     -webkit-user-select: none;
     user-select: none;
-    backdrop-filter: blur(12px);
   }
 
   .title-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     min-width: 0;
   }
 
   .logo {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: 6px;
     -webkit-app-region: no-drag;
   }
@@ -112,58 +111,55 @@
   .title-text {
     display: inline-flex;
     align-items: baseline;
-    font-size: 0.95rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: #f8fafc;
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    letter-spacing: 1px;
   }
 
   .title-version {
-    margin-left: 8px;
-    font-size: 0.75rem;
+    margin-left: 6px;
+    font-size: 11px;
     font-weight: 500;
-    letter-spacing: normal;
-    text-transform: none;
-    color: rgba(148, 163, 184, 0.95);
+    color: #94a3b8;
   }
 
   .title-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     -webkit-app-region: no-drag;
   }
 
   .control-button {
-    width: 36px;
-    height: 28px;
+    width: 32px;
+    height: 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
-    border: 1px solid rgba(59, 130, 246, 0.25);
-    background: rgba(15, 23, 42, 0.55);
-    color: inherit;
-    transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+    transition: all 0.2s ease;
   }
 
   .control-button:focus-visible {
-    outline: 2px solid #38bdf8;
-    outline-offset: 2px;
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
   }
 
   .icon {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
   }
 
   .control-button:hover {
-    background: rgba(59, 130, 246, 0.2);
-    border-color: rgba(59, 130, 246, 0.4);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
   }
 
   .control-button:active {
@@ -171,24 +167,24 @@
   }
 
   .control-button.close:hover {
-    background: rgba(239, 68, 68, 0.27);
-    border-color: rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
   }
 
   .control-button.settings {
-    width: 38px;
-    background: rgba(37, 99, 235, 0.15);
-    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.2);
   }
 
   .control-button.settings:hover {
-    background: rgba(59, 130, 246, 0.25);
-    border-color: rgba(59, 130, 246, 0.55);
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
   }
 
   .control-button.settings.active {
-    background: rgba(129, 140, 248, 0.35);
-    border-color: rgba(99, 102, 241, 0.75);
-    color: #e0e7ff;
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #93c5fd;
   }
 </style>

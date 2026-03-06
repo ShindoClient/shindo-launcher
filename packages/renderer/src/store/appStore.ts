@@ -412,14 +412,25 @@ async function applyConfigPatch(patch: Partial<LauncherConfig>): Promise<void> {
 
 async function launch(): Promise<void> {
   const current = get(store)
+  console.log('[DEBUG] launch() called, current state:', {
+    activeAccountId: current.accounts.activeAccountId,
+    accounts: current.accounts.entries.length,
+    launching: current.launching,
+    config: current.config ? 'present' : 'missing'
+  })
+  
   if (!current.accounts.activeAccountId) {
+    console.log('[DEBUG] No active account selected')
     store.update((state) => ({
       ...state,
       launcherStatus: translate('home.status.accountRequired'),
     }))
     return
   }
-  if (current.launching) return
+  if (current.launching) {
+    console.log('[DEBUG] Already launching, skipping')
+    return
+  }
 
   store.update((state) => {
     return {
@@ -431,25 +442,30 @@ async function launch(): Promise<void> {
 
   const showLogs = current.config?.showLogsOnLaunch ?? true
   if (showLogs) {
+    console.log('[DEBUG] Opening log window')
     window.shindo.openLogWindow().catch((error) => console.error('Failed to open log window', error))
   }
 
   try {
     const config = get(store).config
+    console.log('[DEBUG] Config:', config)
     const options = config
       ? {
           memory: { max: `${Math.max(1, config.ramGB)}G` },
         }
       : undefined
 
+    console.log('[DEBUG] Calling window.shindo.launchClient with options:', options)
     const result = await window.shindo.launchClient(options)
+    console.log('[DEBUG] launchClient result:', result)
+    
     const summary = result.pid
       ? translate('home.status.startedPid', { pid: result.pid })
       : translate('home.status.started')
     store.update((state) => ({ ...state, launcherStatus: summary }))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error('Failed to launch client', message)
+    console.error('[DEBUG] Failed to launch client', error)
     store.update((state) => ({
       ...state,
       launcherStatus: translate('home.status.failed', { message }),

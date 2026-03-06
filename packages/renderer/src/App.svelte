@@ -6,7 +6,7 @@
   import HomeScreen from './screens/HomeScreen.svelte'
   import SettingsScreen from './screens/SettingsScreen.svelte'
   import AccountsScreen from './screens/AccountsScreen.svelte'
-  import NavigationBar from './components/NavigationBar.svelte'
+  import Sidebar from './components/Sidebar.svelte'
 
   const { init } = appStore
 
@@ -15,11 +15,11 @@
   })
 </script>
 
-<div class="flex h-screen w-screen flex-col bg-slate-950">
+<div class="flex h-screen w-screen flex-col bg-black">
   <TitleBar />
-  <div class="flex w-full flex-1 flex-col min-h-0">
+  <div class="flex w-full flex-1 min-h-0">
     {#if $appStore.screen !== 'update'}
-      <NavigationBar />
+      <Sidebar />
     {/if}
     <div class="flex w-full flex-1 min-h-0">
       {#if $appStore.screen === 'update'}
@@ -34,3 +34,19 @@
     </div>
   </div>
 </div>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+  
+  :global(*) {
+    font-family: 'Poppins', sans-serif;
+  }
+  
+  :global(body) {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000000;
+    color: #ffffff;
+  }
+</style>

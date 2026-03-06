@@ -82,119 +82,149 @@
   }
 </script>
 
-{#if !config || !systemMemory}
-  <div class="flex h-full w-full items-center justify-center text-slate-100">
-    <p class="text-sm text-slate-400">{$t('settings.loading')}</p>
-  </div>
-{:else}
-  <div class="flex w-full h-full min-h-0 flex-col px-4 py-2 text-slate-100">
-    <header class="mb-4 flex items-center justify-between gap-2">
+<div class="flex w-full h-full min-h-0 flex-col p-6 text-white">
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-8">
+    <div class="flex items-center gap-4">
       <button
         type="button"
-        class="inline-flex items-center rounded-md bg-slate-800 px-3 py-2 text-sm font-medium hover:bg-slate-700"
+        class="flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 rounded-lg text-sm font-medium transition"
         on:click={() => setScreen('home')}
       >
-        <ChevronLeft class="mr-2 h-4 w-4" />
-        {$t('settings.back')}
+        <ChevronLeft class="h-4 w-4" />
+        Back
       </button>
-      <h1 class="text-lg font-semibold text-slate-200">{$t('settings.title')}</h1>
-      <span class="text-xs text-slate-500">{$t('settings.totalMemory')}: {systemMemory.totalGB} GB</span>
-    </header>
+      <h1 class="text-2xl font-bold">Settings</h1>
+    </div>
+    <div class="text-sm text-gray-400 bg-gray-900/50 px-4 py-2 rounded-lg">
+      Total Memory: <span class="font-bold text-white">{systemMemory?.totalGB || 8} GB</span>
+    </div>
+  </div>
 
-    <ScrollArea className="flex-1 min-h-0 px-5">
-      <section class="mx-auto grid w-full max-w-3xl grid-cols-1 gap-5 px-2 md:grid-cols-2 md:px-4">
-        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-          <h2 class="text-base font-semibold text-slate-200">{$t('settings.ramTitle')}</h2>
-          <p class="mt-1 text-sm text-slate-400">{$t('settings.ramDescription')}</p>
-          <div class="mt-6 flex items-center gap-4">
-            <input
-              type="range"
-              min={1}
-              max={systemMemory.totalGB}
-              step={1}
-              value={ramValue}
-              class="flex-1 accent-indigo-500"
-              on:input={handleRamInput}
-            />
-            <span class="w-16 text-right text-sm font-semibold text-indigo-400">{ramValue} GB</span>
+  <ScrollArea className="flex-1 min-h-0">
+    <div class="max-w-4xl mx-auto space-y-6">
+      <!-- RAM Settings -->
+      <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+        <h2 class="text-lg font-semibold text-white mb-4">Memory Allocation</h2>
+        <p class="text-sm text-gray-400 mb-6">Adjust how much RAM is allocated to Minecraft</p>
+        
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-gray-300">Allocated RAM</span>
+            <span class="text-xl font-bold text-blue-400">{ramValue} GB</span>
+          </div>
+          <input
+            type="range"
+            min="1"
+            max={systemMemory?.totalGB || 8}
+            step="1"
+            value={ramValue}
+            class="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            on:input={handleRamInput}
+          />
+          <div class="flex justify-between text-xs text-gray-500">
+            <span>1 GB</span>
+            <span>{systemMemory?.totalGB || 8} GB</span>
           </div>
         </div>
+      </div>
 
-        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-          <h2 class="text-base font-semibold text-slate-200">{$t('settings.runtimeTitle')}</h2>
-          <p class="mt-1 text-sm text-slate-400">{$t('settings.runtimeDescription')}</p>
-          <select
-            class="mt-6 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-            value={config.jrePreference}
-            on:change={handleJreChange}
-          >
-            <option value="system">{$t('settings.runtimeSystem')}</option>
-            <option value="zulu">{$t('settings.runtimeZulu')}</option>
-            <option value="temurin">{$t('settings.runtimeTemurin')}</option>
-          </select>
-          {#if config.jrePath}
-            <p class="mt-3 break-all text-xs text-slate-500">{$t('settings.runtimeCurrent')}: {config.jrePath}</p>
+      <!-- Java Runtime -->
+      <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+        <h2 class="text-lg font-semibold text-white mb-4">Java Runtime</h2>
+        <p class="text-sm text-gray-400 mb-6">Choose which Java version to use</p>
+        
+        <select
+          class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          value={config?.jrePreference || 'system'}
+          on:change={handleJreChange}
+        >
+          <option value="system">System JRE</option>
+          <option value="zulu">Azul Zulu</option>
+          <option value="temurin">Eclipse Temurin</option>
+        </select>
+        
+        {#if config?.jrePath}
+          <div class="mt-4 p-3 bg-gray-800/30 rounded-lg">
+            <div class="text-xs text-gray-400 mb-1">Current Java Path</div>
+            <div class="text-sm text-gray-200 font-mono break-all">{config.jrePath}</div>
+          </div>
+        {/if}
+      </div>
+
+      <!-- JVM Arguments -->
+      <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-white">JVM Arguments</h2>
+          {#if savingJvmArgs}
+            <span class="inline-flex items-center text-sm text-green-400">
+              <Save class="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </span>
           {/if}
         </div>
-
-        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-2">
-          <div class="mb-2 flex items-center justify-between">
-            <h2 class="text-base font-semibold text-slate-200">{$t('settings.jvmArgsTitle')}</h2>
-            {#if savingJvmArgs}
-              <span class="inline-flex items-center text-xs text-slate-400">
-                <Save class="mr-1 h-3 w-3" />
-                {$t('settings.jvmSaving')}
-              </span>
-            {/if}
-          </div>
-          <p class="text-sm text-slate-400">{$t('settings.jvmArgsDescription')}</p>
-          <textarea
-            class="mt-4 h-32 w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-            bind:value={jvmArgsDraft}
-            on:blur={() => handleJvmBlur()}
-            placeholder="Ex: -Xmx4G -XX:+UseG1GC"
-          />
+        <p class="text-sm text-gray-400 mb-4">Advanced Java Virtual Machine arguments</p>
+        
+        <textarea
+          class="w-full h-32 resize-none px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          bind:value={jvmArgsDraft}
+          on:blur={() => handleJvmBlur()}
+          placeholder="-Xmx4G -XX:+UseG1GC -XX:+UnlockExperimentalVMOptions"
+        />
+        
+        <div class="mt-3 text-xs text-gray-500">
+          Press Enter to save changes. Common arguments: -Xmx4G (max memory), -Xms2G (min memory), -XX:+UseG1GC (G1 garbage collector)
         </div>
+      </div>
 
-        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-2">
-          <h2 class="text-base font-semibold text-slate-200">{$t('settings.interfaceTitle')}</h2>
-          <p class="mt-1 text-sm text-slate-400">
-            {$t('settings.interfaceDescription')}
-          </p>
-          <div class="mt-5 flex flex-col gap-4">
-            <div class="flex items-center justify-between gap-4 rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3">
-              <div class="max-w-[70%]">
-                <span class="text-sm font-medium text-slate-200">{$t('settings.logsLabel')}</span>
-                <p class="mt-1 text-xs text-slate-500">
-                  {$t('settings.logsDescription')}
-                </p>
+      <!-- Interface Settings -->
+      <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+        <h2 class="text-lg font-semibold text-white mb-4">Interface</h2>
+        <p class="text-sm text-gray-400 mb-6">Customize the launcher interface</p>
+        
+        <div class="space-y-4">
+          <!-- Log Window Toggle -->
+          <div class="flex items-center justify-between p-4 rounded-lg border border-gray-800 bg-gray-900/30">
+            <div>
+              <div class="text-sm font-medium text-gray-200">Show Log Window on Launch</div>
+              <p class="text-xs text-gray-500 mt-1">
+                Automatically open the log window when launching the game
+              </p>
             </div>
             <ToggleButton
               checked={showLogsOnLaunch}
-              label={$t('settings.logsLabel')}
+              label="Show Logs"
               on:change={handleLogWindowToggle}
             />
+          </div>
+
+          <!-- Language Selector -->
+          <div class="flex items-center justify-between p-4 rounded-lg border border-gray-800 bg-gray-900/30">
+            <div>
+              <div class="text-sm font-medium text-gray-200">Language</div>
+              <p class="text-xs text-gray-500 mt-1">
+                Choose your preferred language
+              </p>
             </div>
-            <div class="flex items-center justify-between gap-4 rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3">
-              <div class="max-w-[70%]">
-                <span class="text-sm font-medium text-slate-200">{$t('settings.languageLabel')}</span>
-                <p class="mt-1 text-xs text-slate-500">
-                  {$t('settings.languageDescription')}
-                </p>
-              </div>
-              <select
-                class="w-44 rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-                value={language}
-                on:change={handleLanguageChange}
-              >
-                {#each availableLanguages as option}
-                  <option value={option.code} selected={option.code === language}>{option.label}</option>
-                {/each}
-              </select>
-            </div>
+            <select
+              class="w-48 px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={language}
+              on:change={handleLanguageChange}
+            >
+              {#each availableLanguages as option}
+                <option value={option.code} selected={option.code === language}>{option.label}</option>
+              {/each}
+            </select>
           </div>
         </div>
-      </section>
-    </ScrollArea>
-  </div>
-{/if}
+      </div>
+    </div>
+  </ScrollArea>
+</div>
+
+<style>
+  :global(body) {
+    background: #000;
+    color: #fff;
+  }
+</style>
