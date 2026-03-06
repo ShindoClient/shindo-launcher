@@ -110,7 +110,7 @@
       <div class="banner-overlay"></div>
     </div>
 
-    <!-- Botão LAUNCH grande -->
+    <!-- Botão LAUNCH grande com seletor de versão integrado -->
     <button
       type="button"
       class="launch-button"
@@ -119,41 +119,40 @@
     >
       <div class="launch-content">
         <span class="launch-text">{launching ? 'LAUNCHING...' : 'LAUNCH'}</span>
-        <span class="launch-version">{selectedVersionLabel}</span>
+        <!-- Seletor de versão integrado -->
+        <div class="version-selector-inline" bind:this={dropdownRef}>
+          <button
+            type="button"
+            class="version-button-inline"
+            on:click={(e) => { e.stopPropagation(); toggleVersionMenu(e); }}
+          >
+            <span>{selectedVersionLabel}</span>
+            <ChevronDown class={`chevron-inline ${versionMenuOpen ? 'open' : ''}`} />
+          </button>
+        </div>
       </div>
       <div class="launch-icon">
         <Play class="play-icon" />
       </div>
     </button>
 
-    <!-- Seletor de versão pequeno abaixo do botão -->
-    <div class="version-selector" bind:this={dropdownRef}>
-      <button
-        type="button"
-        class="version-button"
-        on:click={toggleVersionMenu}
-      >
-        <span>{selectedVersionLabel}</span>
-        <ChevronDown class={`chevron ${versionMenuOpen ? 'open' : ''}`} />
-      </button>
-      
-      {#if versionOptions.length > 0 && versionMenuOpen}
-        <div class="version-dropdown">
-          {#each versionOptions as option}
-            <button
-              type="button"
-              class="version-option"
-              on:click={() => selectVersion(option.id)}
-            >
-              <span>{option.label}</span>
-              {#if option.id === selectedVersionId}
-                <span class="active-badge">ACTIVE</span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-      {/if}
-    </div>
+    <!-- Dropdown de versão (fora do botão) -->
+    {#if versionOptions.length > 0 && versionMenuOpen}
+      <div class="version-dropdown-external">
+        {#each versionOptions as option}
+          <button
+            type="button"
+            class="version-option"
+            on:click={() => selectVersion(option.id)}
+          >
+            <span>{option.label}</span>
+            {#if option.id === selectedVersionId}
+              <span class="active-badge">ACTIVE</span>
+            {/if}
+          </button>
+        {/each}
+      </div>
+    {/if}
 
     <!-- Status message -->
     {#if updateStatus !== 'completed'}
@@ -237,15 +236,15 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     position: relative;
-    padding: 40px;
+    padding: 80px 40px 40px 40px;
   }
 
   .banner-background {
     position: absolute;
-    width: 600px;
-    height: 300px;
+    width: 1000px;
+    height: 250px;
     border-radius: 20px;
     overflow: hidden;
     z-index: 1;
@@ -266,7 +265,7 @@
   .launch-button {
     position: relative;
     z-index: 2;
-    width: 500px;
+    width: 400px;
     height: 80px;
     background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
     border: none;
@@ -299,6 +298,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    gap: 4px;
   }
 
   .launch-text {
@@ -308,10 +308,38 @@
     letter-spacing: 1px;
   }
 
-  .launch-version {
-    font-size: 13px;
+  .version-selector-inline {
+    display: flex;
+    align-items: center;
+  }
+
+  .version-button-inline {
+    background: rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    padding: 4px 10px;
+    color: rgba(0, 0, 0, 0.7);
+    font-size: 11px;
     font-weight: 600;
-    color: rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+
+  .version-button-inline:hover {
+    background: rgba(0, 0, 0, 0.15);
+  }
+
+  .chevron-inline {
+    width: 12px;
+    height: 12px;
+    transition: transform 0.2s;
+  }
+
+  .chevron-inline.open {
+    transform: rotate(180deg);
   }
 
   .launch-icon {
@@ -330,46 +358,11 @@
     color: #000000;
   }
 
-  .version-selector {
-    position: relative;
-    margin-top: 20px;
-    z-index: 3;
-  }
-
-  .version-button {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 10px 20px;
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: all 0.2s;
-  }
-
-  .version-button:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .chevron {
-    width: 16px;
-    height: 16px;
-    transition: transform 0.2s;
-  }
-
-  .chevron.open {
-    transform: rotate(180deg);
-  }
-
-  .version-dropdown {
+  .version-dropdown-external {
     position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
-    right: 0;
+    top: 160px;
+    z-index: 3;
+    width: 300px;
     background: #1a1a1a;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
