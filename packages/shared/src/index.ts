@@ -73,6 +73,8 @@ export interface VersionBuildCatalogEntry {
   semver: string | null;
   label: string;
   packageUrl: string | null;
+  jarUrl: string | null;
+  legacyJarUrl: string | null;
   versionUrl: string | null;
   versionJsonPath: string | null;
   releasedAt: string | null;

@@ -191,6 +191,8 @@ export interface CdnClientVersionEntry {
   buildVersion: string | null
   buildNumber?: number | null
   packageUrl: string
+  jarUrl?: string | null
+  legacyJarUrl?: string | null
   versionUrl?: string | null
   baseVersion?: string | null
   assetsIndex?: string | null
@@ -242,6 +244,8 @@ function asBuildEntry(
     asString(value.zipUrl) ||
     asString(value.downloadUrl) ||
     null
+  const jarUrl = asString(artifacts.jarUrl) || asString(value.jarUrl) || null
+  const legacyJarUrl = asString(artifacts.legacyJarUrl) || asString(value.legacyJarUrl) || null
 
   const versionUrl =
     asString(artifacts.versionUrl) ||
@@ -260,6 +264,8 @@ function asBuildEntry(
     semver,
     label,
     packageUrl: packageUrl ? toAbsoluteUrl(packageUrl) : null,
+    jarUrl: jarUrl ? toAbsoluteUrl(jarUrl) : null,
+    legacyJarUrl: legacyJarUrl ? toAbsoluteUrl(legacyJarUrl) : null,
     versionUrl: versionUrl ? toAbsoluteUrl(versionUrl) : null,
     versionJsonPath,
     releasedAt: asString(value.releasedAt),
@@ -385,6 +391,8 @@ function toResolvedVersionEntry(
     buildVersion: build.semver ?? String(build.build),
     buildNumber: build.build,
     packageUrl: build.packageUrl,
+    jarUrl: build.jarUrl,
+    legacyJarUrl: build.legacyJarUrl,
     versionUrl: build.versionUrl,
     baseVersion: entry.baseVersion,
     assetsIndex: entry.assetsIndex,

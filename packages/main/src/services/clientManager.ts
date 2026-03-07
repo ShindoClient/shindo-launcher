@@ -38,6 +38,8 @@ interface ResolvedClientSource {
   packageUrl: string
   remoteVersion: string
   buildNumber?: number | null
+  jarUrl?: string | null
+  legacyJarUrl?: string | null
   baseVersion?: string | null
   assetsIndex?: string | null
   hintedVersionJsonPath?: string | null
@@ -317,6 +319,8 @@ async function resolveFromCdn(versionId: string, build?: number | null): Promise
     packageUrl: entry.packageUrl,
     remoteVersion,
     buildNumber: entry.buildNumber ?? null,
+    jarUrl: entry.jarUrl ?? null,
+    legacyJarUrl: entry.legacyJarUrl ?? null,
     baseVersion: entry.baseVersion,
     assetsIndex: entry.assetsIndex,
     hintedVersionJsonPath: entry.versionJsonPath,
@@ -361,6 +365,31 @@ async function resolveClientSource(versionId: string, build?: number | null): Pr
   return resolveFromGithub(versionId)
 }
 
+async function ensureCanonicalJarFromRemote(
+  clientDir: string,
+  versionId: string,
+  jarUrl?: string | null,
+  legacyJarUrl?: string | null,
+): Promise<void> {
+  const canonicalJarPath = path.join(clientDir, `${versionId}.jar`)
+  if (fs.existsSync(canonicalJarPath)) return
+
+  const candidateUrls = [jarUrl, legacyJarUrl].filter((value): value is string => Boolean(value && value.trim()))
+  if (candidateUrls.length === 0) return
+
+  for (const candidateUrl of candidateUrls) {
+    try {
+      const stream = await downloadFromUrl(candidateUrl)
+      await pipeline(stream, fs.createWriteStream(canonicalJarPath))
+      if (fs.existsSync(canonicalJarPath) && fs.statSync(canonicalJarPath).size > 0) {
+        return
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+}
+
 export async function ensureClientUpToDate(
   { force = false, versionId: requestedVersionId, build }: EnsureClientOptions = {},
 ): Promise<ClientUpdatePayload> {
@@ -370,6 +399,12 @@ export async function ensureClientUpToDate(
 
   if (!force && localVersion && localVersion === source.remoteVersion) {
     const jsonPath = normalizeVersionLayout(layout.clientDir, layout.versionId, source.hintedVersionJsonPath)
+    await ensureCanonicalJarFromRemote(
+      layout.clientDir,
+      layout.versionId,
+      source.jarUrl,
+      source.legacyJarUrl,
+    )
     const parsed = parseClientJson(jsonPath, layout.versionId)
 
     return {
@@ -396,6 +431,12 @@ export async function ensureClientUpToDate(
   writeLocalVersion(layout.versionMarkerFile, source.remoteVersion)
 
   const jsonPath = normalizeVersionLayout(layout.clientDir, layout.versionId, source.hintedVersionJsonPath)
+  await ensureCanonicalJarFromRemote(
+    layout.clientDir,
+    layout.versionId,
+    source.jarUrl,
+    source.legacyJarUrl,
+  )
   const parsed = parseClientJson(jsonPath, layout.versionId)
 
   return {
@@ -460,6 +501,8 @@ export async function getVersionCatalog(): Promise<VersionCatalogPayload> {
                 semver: local.version,
                 label: `Build ${normalizedBuild}`,
                 packageUrl: null,
+                jarUrl: null,
+                legacyJarUrl: null,
                 versionUrl: null,
                 versionJsonPath: local.versionJsonPath ?? null,
                 releasedAt: null,
