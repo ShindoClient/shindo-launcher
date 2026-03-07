@@ -81,6 +81,7 @@ export interface VersionBuildCatalogEntry {
 export interface VersionCatalogEntry {
   id: string;
   name: string;
+  enabled: boolean;
   minecraftVersion: string;
   bannerUrl: string | null;
   assetsIndex: string | null;

@@ -286,6 +286,7 @@ function asCatalogEntry(value: Record<string, unknown>, fallbackVersionId: strin
   const assetsIndex = asString(value.assetsIndex) || asString(value.assets) || null
   const bannerUrl = asString(value.bannerUrl)
   const name = asString(value.name) || `Shindo Client ${minecraftVersion}`
+  const enabled = value.enabled === false ? false : true
 
   const buildsRaw = Array.isArray(value.builds)
     ? (value.builds as Array<Record<string, unknown>>)
@@ -314,6 +315,7 @@ function asCatalogEntry(value: Record<string, unknown>, fallbackVersionId: strin
   return {
     id: versionId,
     name,
+    enabled,
     minecraftVersion,
     bannerUrl: bannerUrl ? toAbsoluteUrl(bannerUrl) : null,
     assetsIndex,

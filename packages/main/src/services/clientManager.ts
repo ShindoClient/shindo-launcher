@@ -179,6 +179,94 @@ function locateVersionJson(clientDir: string, versionId: string, hintedPath?: st
   return null
 }
 
+function readJsonRecord(filePath: string): Record<string, unknown> | null {
+  try {
+    const content = fs.readFileSync(filePath, VERSION_FILE_ENCODING)
+    const parsed = JSON.parse(content) as unknown
+    if (!parsed || typeof parsed !== 'object') return null
+    return parsed as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function findJarByName(clientDir: string, expectedName: string): string | null {
+  const queue: string[] = [clientDir]
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!current) continue
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        queue.push(full)
+        continue
+      }
+      if (entry.name === expectedName) {
+        return full
+      }
+    }
+  }
+  return null
+}
+
+function findAnyJar(clientDir: string): string | null {
+  const queue: string[] = [clientDir]
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!current) continue
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        queue.push(full)
+        continue
+      }
+      if (entry.name.toLowerCase().endsWith('.jar')) {
+        return full
+      }
+    }
+  }
+  return null
+}
+
+function normalizeVersionLayout(clientDir: string, versionId: string, hintedPath?: string | null): string | null {
+  const locatedJson = locateVersionJson(clientDir, versionId, hintedPath)
+  if (!locatedJson) return null
+
+  const payload = readJsonRecord(locatedJson)
+  if (!payload) return locatedJson
+
+  const canonicalJsonPath = path.join(clientDir, `${versionId}.json`)
+  const currentId = typeof payload.id === 'string' ? payload.id : null
+  const normalizedPayload: Record<string, unknown> = {
+    ...payload,
+    id: versionId,
+  }
+
+  if (locatedJson !== canonicalJsonPath || currentId !== versionId) {
+    fs.writeFileSync(canonicalJsonPath, JSON.stringify(normalizedPayload, null, 2), VERSION_FILE_ENCODING)
+  }
+
+  const jarToken = typeof payload.jar === 'string' && payload.jar.trim().length > 0
+    ? payload.jar.trim()
+    : (currentId || 'ShindoClient')
+  const canonicalJarPath = path.join(clientDir, `${versionId}.jar`)
+  const jarCandidates = [
+    path.join(path.dirname(locatedJson), `${jarToken}.jar`),
+    path.join(path.dirname(locatedJson), `${currentId ?? ''}.jar`),
+    path.join(path.dirname(locatedJson), 'ShindoClient.jar'),
+    findJarByName(clientDir, `${jarToken}.jar`),
+    findJarByName(clientDir, `${currentId ?? ''}.jar`),
+    findJarByName(clientDir, 'ShindoClient.jar'),
+    findAnyJar(clientDir),
+  ].filter((candidate): candidate is string => Boolean(candidate && fs.existsSync(candidate)))
+
+  if (!fs.existsSync(canonicalJarPath) && jarCandidates.length > 0) {
+    fs.copyFileSync(jarCandidates[0], canonicalJarPath)
+  }
+
+  return fs.existsSync(canonicalJsonPath) ? canonicalJsonPath : locatedJson
+}
+
 function parseClientJson(jsonPath: string | null, fallbackVersionId: string): ParsedClientJson {
   if (!jsonPath || !fs.existsSync(jsonPath)) {
     return { baseVersion: null, id: fallbackVersionId, assets: null }
@@ -281,7 +369,7 @@ export async function ensureClientUpToDate(
   const localVersion = readLocalVersion(layout.versionMarkerFile, layout.versionId)
 
   if (!force && localVersion && localVersion === source.remoteVersion) {
-    const jsonPath = locateVersionJson(layout.clientDir, layout.versionId, source.hintedVersionJsonPath)
+    const jsonPath = normalizeVersionLayout(layout.clientDir, layout.versionId, source.hintedVersionJsonPath)
     const parsed = parseClientJson(jsonPath, layout.versionId)
 
     return {
@@ -307,7 +395,7 @@ export async function ensureClientUpToDate(
   fs.rmSync(zipPath, { force: true })
   writeLocalVersion(layout.versionMarkerFile, source.remoteVersion)
 
-  const jsonPath = locateVersionJson(layout.clientDir, layout.versionId, source.hintedVersionJsonPath)
+  const jsonPath = normalizeVersionLayout(layout.clientDir, layout.versionId, source.hintedVersionJsonPath)
   const parsed = parseClientJson(jsonPath, layout.versionId)
 
   return {
@@ -326,7 +414,7 @@ export async function ensureClientUpToDate(
 export function getLocalClientState(options?: { versionId?: string }): ClientStatePayload {
   const layout = resolveStorageLayout(options?.versionId)
   const localVersion = readLocalVersion(layout.versionMarkerFile, layout.versionId)
-  const jsonPath = locateVersionJson(layout.clientDir, layout.versionId)
+  const jsonPath = normalizeVersionLayout(layout.clientDir, layout.versionId)
   const parsed = parseClientJson(jsonPath, layout.versionId)
 
   return {
@@ -358,6 +446,7 @@ export async function getVersionCatalog(): Promise<VersionCatalogPayload> {
       {
         id: config.versionId,
         name: `Shindo Client ${local.baseVersion ?? '1.8.9'}`,
+        enabled: true,
         minecraftVersion: local.baseVersion ?? '1.8.9',
         bannerUrl: null,
         assetsIndex: local.assetsIndex ?? null,

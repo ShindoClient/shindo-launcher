@@ -66,7 +66,9 @@
   $: selectedVersionId = config?.versionId ?? clientState?.versionId ?? 'ShindoClient'
   $: selectedVersionPresentation = resolveVersionPresentation(clientState)
   $: versionCatalog = state.versionCatalog
-  $: versionCards = versionCatalog?.entries ?? []
+  $: allVersionCards = versionCatalog?.entries ?? []
+  $: enabledVersionCards = allVersionCards.filter((entry) => entry.enabled !== false)
+  $: versionCards = enabledVersionCards.length > 0 ? enabledVersionCards : allVersionCards
   $: selectedVersionMeta =
     versionCards.find((entry) => entry.id === selectedVersionId) ||
     versionCards.find((entry) => entry.id === versionCatalog?.defaultVersionId) ||
