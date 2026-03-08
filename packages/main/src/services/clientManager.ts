@@ -1,8 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { buffer } from 'node:stream/consumers';
-import { pipeline } from 'node:stream/promises';
-import AdmZip from 'adm-zip';
 import type {
   ClientStatePayload,
   ClientUpdatePayload,
@@ -10,6 +5,11 @@ import type {
   ReleaseInfo,
   VersionCatalogPayload,
 } from '@shindo/shared';
+import AdmZip from 'adm-zip';
+import fs from 'node:fs';
+import path from 'node:path';
+import { buffer } from 'node:stream/consumers';
+import { pipeline } from 'node:stream/promises';
 import {
   distributionConfig,
   resolveClientRepo,
@@ -22,8 +22,8 @@ import {
   loadVersionCatalogFromCdn,
   resolveClientVersionFromCdn,
 } from './cdnClient';
-import { downloadAsset, fetchLatestRelease, GitHubAsset, GitHubRelease } from './githubClient';
 import { loadConfig } from './configService';
+import { GitHubAsset, GitHubRelease, downloadAsset, fetchLatestRelease } from './githubClient';
 
 const VERSION_FILE_ENCODING: BufferEncoding = 'utf8';
 const VERSION_MARKER_NAME = '.client-version';
@@ -200,44 +200,6 @@ function readJsonRecord(filePath: string): Record<string, unknown> | null {
   }
 }
 
-function findJarByName(clientDir: string, expectedName: string): string | null {
-  const queue: string[] = [clientDir];
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) continue;
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        queue.push(full);
-        continue;
-      }
-      if (entry.name === expectedName) {
-        return full;
-      }
-    }
-  }
-  return null;
-}
-
-function findAnyJar(clientDir: string): string | null {
-  const queue: string[] = [clientDir];
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) continue;
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        queue.push(full);
-        continue;
-      }
-      if (entry.name.toLowerCase().endsWith('.jar')) {
-        return full;
-      }
-    }
-  }
-  return null;
-}
-
 function normalizeVersionLayout(
   clientDir: string,
   versionId: string,
@@ -250,7 +212,9 @@ function normalizeVersionLayout(
   if (!payload) return locatedJson;
 
   const canonicalJsonPath = path.join(clientDir, `${versionId}.json`);
+
   const currentId = typeof payload.id === 'string' ? payload.id : null;
+
   const normalizedPayload: Record<string, unknown> = {
     ...payload,
     id: versionId,
@@ -262,25 +226,6 @@ function normalizeVersionLayout(
       JSON.stringify(normalizedPayload, null, 2),
       VERSION_FILE_ENCODING,
     );
-  }
-
-  const jarToken =
-    typeof payload.jar === 'string' && payload.jar.trim().length > 0
-      ? payload.jar.trim()
-      : currentId || 'ShindoClient';
-  const canonicalJarPath = path.join(clientDir, `${versionId}.jar`);
-  const jarCandidates = [
-    path.join(path.dirname(locatedJson), `${jarToken}.jar`),
-    path.join(path.dirname(locatedJson), `${currentId ?? ''}.jar`),
-    path.join(path.dirname(locatedJson), 'ShindoClient.jar'),
-    findJarByName(clientDir, `${jarToken}.jar`),
-    findJarByName(clientDir, `${currentId ?? ''}.jar`),
-    findJarByName(clientDir, 'ShindoClient.jar'),
-    findAnyJar(clientDir),
-  ].filter((candidate): candidate is string => Boolean(candidate && fs.existsSync(candidate)));
-
-  if (!fs.existsSync(canonicalJarPath) && jarCandidates.length > 0) {
-    fs.copyFileSync(jarCandidates[0], canonicalJarPath);
   }
 
   return fs.existsSync(canonicalJsonPath) ? canonicalJsonPath : locatedJson;
@@ -387,33 +332,6 @@ async function resolveClientSource(
   return resolveFromGithub(versionId);
 }
 
-async function ensureCanonicalJarFromRemote(
-  clientDir: string,
-  versionId: string,
-  jarUrl?: string | null,
-  legacyJarUrl?: string | null,
-): Promise<void> {
-  const canonicalJarPath = path.join(clientDir, `${versionId}.jar`);
-  if (fs.existsSync(canonicalJarPath)) return;
-
-  const candidateUrls = [jarUrl, legacyJarUrl].filter((value): value is string =>
-    Boolean(value && value.trim()),
-  );
-  if (candidateUrls.length === 0) return;
-
-  for (const candidateUrl of candidateUrls) {
-    try {
-      const stream = await downloadFromUrl(candidateUrl);
-      await pipeline(stream, fs.createWriteStream(canonicalJarPath));
-      if (fs.existsSync(canonicalJarPath) && fs.statSync(canonicalJarPath).size > 0) {
-        return;
-      }
-    } catch {
-      // try next candidate
-    }
-  }
-}
-
 export async function ensureClientUpToDate({
   force = false,
   versionId: requestedVersionId,
@@ -428,12 +346,6 @@ export async function ensureClientUpToDate({
       layout.clientDir,
       layout.versionId,
       source.hintedVersionJsonPath,
-    );
-    await ensureCanonicalJarFromRemote(
-      layout.clientDir,
-      layout.versionId,
-      source.jarUrl,
-      source.legacyJarUrl,
     );
     const parsed = parseClientJson(jsonPath, layout.versionId);
 
@@ -464,12 +376,6 @@ export async function ensureClientUpToDate({
     layout.clientDir,
     layout.versionId,
     source.hintedVersionJsonPath,
-  );
-  await ensureCanonicalJarFromRemote(
-    layout.clientDir,
-    layout.versionId,
-    source.jarUrl,
-    source.legacyJarUrl,
   );
   const parsed = parseClientJson(jsonPath, layout.versionId);
 
