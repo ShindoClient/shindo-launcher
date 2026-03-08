@@ -1,33 +1,9 @@
 <script lang="ts">
-  import type { ResolvedVersionPresentation } from '../config/versionCatalog'
-  import { t } from '../i18n'
+  import type { ResolvedVersionPresentation } from '../config/versionCatalog';
+  import { t } from '../i18n';
 
-  export let presentation: ResolvedVersionPresentation
+  export let presentation: ResolvedVersionPresentation;
 </script>
-
-<div
-  class="version-banner"
-  style={`background: ${presentation.backgroundImage};`}
->
-  <div class="version-banner__overlay" />
-  <div class="version-banner__content">
-    <div class="version-banner__header">
-      <span class="version-banner__tag">FEATURED VERSION</span>
-      <div class="version-banner__badge" style={`background: ${presentation.accent}20; border-color: ${presentation.accent}; color: ${presentation.accent};`}>
-        Minecraft {presentation.baseVersion}
-      </div>
-    </div>
-    <h2 class="version-banner__title">{presentation.name}</h2>
-    <p class="version-banner__headline">{presentation.headline}</p>
-    {#if presentation.description}
-      <p class="version-banner__description">{presentation.description}</p>
-    {/if}
-    <div class="version-banner__footer">
-      <div class="version-banner__build">Build {presentation.buildLabel}</div>
-      <div class="version-banner__status">Ready to play</div>
-    </div>
-  </div>
-</div>
 
 <style>
   .version-banner {
@@ -133,3 +109,27 @@
     border-radius: 20px;
   }
 </style>
+
+<div class="version-banner" style={`background: ${presentation.backgroundImage};`}>
+  <div class="version-banner__overlay" />
+  <div class="version-banner__content">
+    <div class="version-banner__header">
+      <span class="version-banner__tag">FEATURED VERSION</span>
+      <div
+        class="version-banner__badge"
+        style={`background: ${presentation.accent}20; border-color: ${presentation.accent}; color: ${presentation.accent};`}
+      >
+        Minecraft {presentation.baseVersion}
+      </div>
+    </div>
+    <h2 class="version-banner__title">{presentation.name}</h2>
+    <p class="version-banner__headline">{presentation.headline}</p>
+    {#if presentation.description}
+      <p class="version-banner__description">{presentation.description}</p>
+    {/if}
+    <div class="version-banner__footer">
+      <div class="version-banner__build">Build {presentation.buildLabel}</div>
+      <div class="version-banner__status">Ready to play</div>
+    </div>
+  </div>
+</div>

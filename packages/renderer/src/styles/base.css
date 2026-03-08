@@ -103,7 +103,8 @@
 
   .border-gradient-blue {
     border: 2px solid transparent;
-    background: linear-gradient(#000000, #000000) padding-box,
+    background:
+      linear-gradient(#000000, #000000) padding-box,
       linear-gradient(135deg, #3b82f6, #8b5cf6) border-box;
   }
 

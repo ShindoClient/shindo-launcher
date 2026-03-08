@@ -25,6 +25,7 @@ pnpm dev
 ```
 
 The dev script runs:
+
 - Vite dev server (Svelte renderer)
 - TypeScript watchers for `shared`, `preload`, `main`
 - Electron pointed at the compiled output (`dist/main`, `dist/preload`)
@@ -128,6 +129,7 @@ packages/
 ```
 
 Configurations:
+
 - `tsconfig.base.json` shared compiler defaults
 - `packages/renderer/svelte.config.js` + `vite.config.ts` for Svelte/Vite
 - `package.json` scripts wire the workspace builds and dev flow

@@ -1,6 +1,6 @@
-import { writable, get } from 'svelte/store'
-import type { Language } from '../i18n'
-import { setLanguage, t } from '../i18n'
+import { writable, get } from 'svelte/store';
+import type { Language } from '../i18n';
+import { setLanguage, t } from '../i18n';
 import type {
   ClientStatePayload,
   LauncherConfig,
@@ -12,44 +12,44 @@ import type {
   AccountsStatePayload,
   AccountProfile,
   VersionCatalogPayload,
-} from '@shindo/shared'
+} from '@shindo/shared';
 
-type Screen = 'update' | 'home' | 'settings'
+type Screen = 'update' | 'home' | 'settings';
 
-type UpdateStatus = 'idle' | 'running' | 'completed' | 'error'
+type UpdateStatus = 'idle' | 'running' | 'completed' | 'error';
 
 interface UpdateState {
-  status: UpdateStatus
-  step: UpdateProgressPayload['step'] | null
-  message: string
-  percent: number
-  phaseIndex: number
-  phaseTotal: number
-  errorMessage?: string
+  status: UpdateStatus;
+  step: UpdateProgressPayload['step'] | null;
+  message: string;
+  percent: number;
+  phaseIndex: number;
+  phaseTotal: number;
+  errorMessage?: string;
 }
 
 interface AppState {
-  screen: Screen
-  update: UpdateState
-  config: LauncherConfig | null
-  systemMemory: SystemMemoryInfo | null
-  clientState: ClientStatePayload | null
-  initializing: boolean
-  updateInFlight: boolean
-  listenersRegistered: boolean
-  launching: boolean
-  clientRunning: boolean
-  launcherStatus: string
+  screen: Screen;
+  update: UpdateState;
+  config: LauncherConfig | null;
+  systemMemory: SystemMemoryInfo | null;
+  clientState: ClientStatePayload | null;
+  initializing: boolean;
+  updateInFlight: boolean;
+  listenersRegistered: boolean;
+  launching: boolean;
+  clientRunning: boolean;
+  launcherStatus: string;
   accounts: {
-    entries: AccountProfile[]
-    activeAccountId: string | null
-    limit: number
-    loading: boolean
-    loginInProgress: boolean
-    error?: string
-  }
-  versionCatalog: VersionCatalogPayload | null
-  versionCatalogLoading: boolean
+    entries: AccountProfile[];
+    activeAccountId: string | null;
+    limit: number;
+    loading: boolean;
+    loginInProgress: boolean;
+    error?: string;
+  };
+  versionCatalog: VersionCatalogPayload | null;
+  versionCatalogLoading: boolean;
 }
 
 const initialState: AppState = {
@@ -80,7 +80,7 @@ const initialState: AppState = {
   },
   versionCatalog: null,
   versionCatalogLoading: false,
-}
+};
 function applyAccountsPayload(state: AppState, payload: AccountsStatePayload): AppState {
   return {
     ...state,
@@ -93,7 +93,7 @@ function applyAccountsPayload(state: AppState, payload: AccountsStatePayload): A
       loginInProgress: false,
       error: undefined,
     },
-  }
+  };
 }
 
 async function refreshAccounts(): Promise<void> {
@@ -104,13 +104,13 @@ async function refreshAccounts(): Promise<void> {
       loading: true,
       error: undefined,
     },
-  }))
+  }));
 
   try {
-    const payload = await window.shindo.getAccounts()
-    store.update((state) => applyAccountsPayload(state, payload))
+    const payload = await window.shindo.getAccounts();
+    store.update((state) => applyAccountsPayload(state, payload));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error ? error.message : String(error);
     store.update((state) => ({
       ...state,
       accounts: {
@@ -118,8 +118,8 @@ async function refreshAccounts(): Promise<void> {
         loading: false,
         error: message,
       },
-    }))
-    throw error
+    }));
+    throw error;
   }
 }
 
@@ -131,13 +131,13 @@ async function addOfflineAccount(username: string): Promise<void> {
       loading: true,
       error: undefined,
     },
-  }))
+  }));
 
   try {
-    const payload = await window.shindo.addOfflineAccount({ username })
-    store.update((state) => applyAccountsPayload(state, payload))
+    const payload = await window.shindo.addOfflineAccount({ username });
+    store.update((state) => applyAccountsPayload(state, payload));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error ? error.message : String(error);
     store.update((state) => ({
       ...state,
       accounts: {
@@ -145,8 +145,8 @@ async function addOfflineAccount(username: string): Promise<void> {
         loading: false,
         error: message,
       },
-    }))
-    throw error
+    }));
+    throw error;
   }
 }
 
@@ -158,13 +158,13 @@ async function addMicrosoftAccount(): Promise<void> {
       loginInProgress: true,
       error: undefined,
     },
-  }))
+  }));
 
   try {
-    const payload = await window.shindo.addMicrosoftAccount()
-    store.update((state) => applyAccountsPayload(state, payload))
+    const payload = await window.shindo.addMicrosoftAccount();
+    store.update((state) => applyAccountsPayload(state, payload));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error ? error.message : String(error);
     store.update((state) => ({
       ...state,
       accounts: {
@@ -172,8 +172,8 @@ async function addMicrosoftAccount(): Promise<void> {
         loginInProgress: false,
         error: message,
       },
-    }))
-    throw error
+    }));
+    throw error;
   }
 }
 
@@ -185,13 +185,13 @@ async function removeAccount(accountId: string): Promise<void> {
       loading: true,
       error: undefined,
     },
-  }))
+  }));
 
   try {
-    const payload = await window.shindo.removeAccount({ accountId })
-    store.update((state) => applyAccountsPayload(state, payload))
+    const payload = await window.shindo.removeAccount({ accountId });
+    store.update((state) => applyAccountsPayload(state, payload));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error ? error.message : String(error);
     store.update((state) => ({
       ...state,
       accounts: {
@@ -199,8 +199,8 @@ async function removeAccount(accountId: string): Promise<void> {
         loading: false,
         error: message,
       },
-    }))
-    throw error
+    }));
+    throw error;
   }
 }
 
@@ -212,13 +212,13 @@ async function selectAccount(accountId: string): Promise<void> {
       loading: true,
       error: undefined,
     },
-  }))
+  }));
 
   try {
-    const payload = await window.shindo.selectAccount({ accountId })
-    store.update((state) => applyAccountsPayload(state, payload))
+    const payload = await window.shindo.selectAccount({ accountId });
+    store.update((state) => applyAccountsPayload(state, payload));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error ? error.message : String(error);
     store.update((state) => ({
       ...state,
       accounts: {
@@ -226,89 +226,90 @@ async function selectAccount(accountId: string): Promise<void> {
         loading: false,
         error: message,
       },
-    }))
-    throw error
+    }));
+    throw error;
   }
 }
 
+const store = writable<AppState>(initialState);
 
-const store = writable<AppState>(initialState)
+let listenersRegistered = false;
+const unsubscribers: Array<() => void> = [];
 
-let listenersRegistered = false
-const unsubscribers: Array<() => void> = []
-
-console.log('[renderer] bridge available:', typeof window.shindo !== 'undefined')
+console.log('[renderer] bridge available:', typeof window.shindo !== 'undefined');
 
 function translate(key: string, params?: Record<string, string | number>): string {
-  return get(t)(key, params)
+  return get(t)(key, params);
 }
 
-function localizeUpdateMessage(message: string, step: UpdateProgressPayload['step'] | null): string {
-  const lower = (message || '').toLowerCase()
+function localizeUpdateMessage(
+  message: string,
+  step: UpdateProgressPayload['step'] | null,
+): string {
+  const lower = (message || '').toLowerCase();
   if (step === 'launcher-update') {
-    if (lower.includes('baixando') || lower.includes('download')) return translate('home.progress.launcherDownloading')
-    if (lower.includes('aplicando') || lower.includes('apply')) return translate('home.progress.launcherApplying')
-    if (lower.includes('preparada') || lower.includes('ready')) return translate('home.progress.launcherReady')
-    if (lower.includes('atualizado') || lower.includes('up to date')) return translate('home.progress.launcherUpToDate')
-    return translate('home.progress.launcher')
+    if (lower.includes('baixando') || lower.includes('download'))
+      return translate('home.progress.launcherDownloading');
+    if (lower.includes('aplicando') || lower.includes('apply'))
+      return translate('home.progress.launcherApplying');
+    if (lower.includes('preparada') || lower.includes('ready'))
+      return translate('home.progress.launcherReady');
+    if (lower.includes('atualizado') || lower.includes('up to date'))
+      return translate('home.progress.launcherUpToDate');
+    return translate('home.progress.launcher');
   }
   if (step === 'jre-setup') {
-    if (lower.includes('verificado') || lower.includes('ready')) return translate('home.progress.jreReady')
-    return translate('home.progress.jreChecking')
+    if (lower.includes('verificado') || lower.includes('ready'))
+      return translate('home.progress.jreReady');
+    return translate('home.progress.jreChecking');
   }
   if (step === 'client-update') {
     if (lower.includes('pronto') || lower.includes('ready') || lower.includes('sincronizado')) {
-      return translate('home.progress.clientReady')
+      return translate('home.progress.clientReady');
     }
-    return translate('home.progress.clientSync')
+    return translate('home.progress.clientSync');
   }
-  return message
+  return message;
 }
 
 function registerListeners(): void {
-  if (listenersRegistered) return
-  listenersRegistered = true
+  if (listenersRegistered) return;
+  listenersRegistered = true;
 
-  unsubscribers.push(
-    window.shindo.onUpdateProgress((payload) => handleUpdateProgress(payload)),
-  )
-  unsubscribers.push(
-    window.shindo.onUpdateCompleted((payload) => handleUpdateCompleted(payload)),
-  )
-  unsubscribers.push(
-    window.shindo.onUpdateError((payload) => handleUpdateError(payload)),
-  )
-  unsubscribers.push(window.shindo.onLaunchExit((payload) => appendExitLog(payload)))
+  unsubscribers.push(window.shindo.onUpdateProgress((payload) => handleUpdateProgress(payload)));
+  unsubscribers.push(window.shindo.onUpdateCompleted((payload) => handleUpdateCompleted(payload)));
+  unsubscribers.push(window.shindo.onUpdateError((payload) => handleUpdateError(payload)));
+  unsubscribers.push(window.shindo.onLaunchExit((payload) => appendExitLog(payload)));
 
-  store.update((state) => ({ ...state, listenersRegistered: true }))
+  store.update((state) => ({ ...state, listenersRegistered: true }));
 }
 
 async function refreshClientState(): Promise<void> {
   try {
-    const state = await window.shindo.getClientState()
-    store.update((prev) => ({ ...prev, clientState: state }))
+    const state = await window.shindo.getClientState();
+    store.update((prev) => ({ ...prev, clientState: state }));
   } catch (error) {
-    console.error('Failed to refresh client state', error)
+    console.error('Failed to refresh client state', error);
   }
 }
 
 async function refreshVersionCatalog(): Promise<void> {
-  store.update((state) => ({ ...state, versionCatalogLoading: true }))
+  store.update((state) => ({ ...state, versionCatalogLoading: true }));
   try {
-    const payload = await window.shindo.getVersionCatalog()
+    const payload = await window.shindo.getVersionCatalog();
     store.update((state) => ({
       ...state,
       versionCatalog: payload,
       versionCatalogLoading: false,
-    }))
+    }));
   } catch (error) {
-    console.error('Failed to load version catalog', error)
-    store.update((state) => ({ ...state, versionCatalogLoading: false }))
+    console.error('Failed to load version catalog', error);
+    store.update((state) => ({ ...state, versionCatalogLoading: false }));
   }
 }
 
 function handleUpdateProgress(payload: UpdateProgressPayload): void {
-  const localizedMessage = localizeUpdateMessage(payload.message, payload.step)
+  const localizedMessage = localizeUpdateMessage(payload.message, payload.step);
   store.update((state) => ({
     ...state,
     update: {
@@ -321,7 +322,7 @@ function handleUpdateProgress(payload: UpdateProgressPayload): void {
       errorMessage: undefined,
     },
     launcherStatus: localizedMessage,
-  }))
+  }));
 }
 
 function handleUpdateCompleted(_payload: UpdateCompletionPayload): void {
@@ -337,12 +338,12 @@ function handleUpdateCompleted(_payload: UpdateCompletionPayload): void {
     },
     launcherStatus: translate('home.status.updateComplete'),
     screen: 'home',
-  }))
-  void refreshClientState()
+  }));
+  void refreshClientState();
 }
 
 function handleUpdateError(payload: UpdateErrorPayload): void {
-  const message = translate('home.status.updateError', { message: payload.message })
+  const message = translate('home.status.updateError', { message: payload.message });
   store.update((state) => ({
     ...state,
     update: {
@@ -355,22 +356,23 @@ function handleUpdateError(payload: UpdateErrorPayload): void {
       errorMessage: payload.message,
     },
     launcherStatus: message,
-  }))
+  }));
 }
 
 function appendExitLog(payload: LaunchExitPayload): void {
-  const exitMessage = payload.code === null || payload.code === undefined
-    ? translate('home.status.exitUnknown')
-    : translate('home.status.exit', { code: payload.code })
+  const exitMessage =
+    payload.code === null || payload.code === undefined
+      ? translate('home.status.exitUnknown')
+      : translate('home.status.exit', { code: payload.code });
   store.update((state) => ({
     ...state,
     clientRunning: false,
     launcherStatus: exitMessage,
-  }))
+  }));
 }
 
 async function startUpdate(): Promise<void> {
-  if (get(store).updateInFlight) return
+  if (get(store).updateInFlight) return;
 
   store.update((state) => ({
     ...state,
@@ -385,74 +387,74 @@ async function startUpdate(): Promise<void> {
       errorMessage: undefined,
     },
     launcherStatus: translate('home.status.checking'),
-  }))
+  }));
 
   try {
-    await window.shindo.runStartupUpdate()
+    await window.shindo.runStartupUpdate();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    handleUpdateError({ success: false, message })
+    const message = error instanceof Error ? error.message : String(error);
+    handleUpdateError({ success: false, message });
   } finally {
-    store.update((state) => ({ ...state, updateInFlight: false }))
+    store.update((state) => ({ ...state, updateInFlight: false }));
   }
 }
 
 async function applyConfigPatch(patch: Partial<LauncherConfig>): Promise<void> {
-  const currentState = get(store)
-  const previousConfig = currentState.config
+  const currentState = get(store);
+  const previousConfig = currentState.config;
   if (previousConfig) {
-    const optimistic = { ...previousConfig, ...patch } as LauncherConfig
+    const optimistic = { ...previousConfig, ...patch } as LauncherConfig;
     if (optimistic.language) {
-      setLanguage(optimistic.language as Language)
+      setLanguage(optimistic.language as Language);
     }
     store.update((state) => ({
       ...state,
       config: optimistic,
-    }))
+    }));
   }
   try {
-    const updated = await window.shindo.setConfig(patch)
+    const updated = await window.shindo.setConfig(patch);
     if (updated.language) {
-      setLanguage(updated.language as Language)
+      setLanguage(updated.language as Language);
     }
     store.update((state) => ({
       ...state,
       config: updated,
-    }))
+    }));
   } catch (error) {
     if (previousConfig) {
       store.update((state) => ({
         ...state,
         config: previousConfig,
-      }))
+      }));
       if (previousConfig.language) {
-        setLanguage(previousConfig.language as Language)
+        setLanguage(previousConfig.language as Language);
       }
     }
-    throw error
+    throw error;
   }
 }
 
 async function launch(): Promise<void> {
-  const current = get(store)
+  const current = get(store);
   console.log('[DEBUG] launch() called, current state:', {
     activeAccountId: current.accounts.activeAccountId,
     accounts: current.accounts.entries.length,
     launching: current.launching,
-    config: current.config ? 'present' : 'missing'
-  })
-  
+    config: current.config ? 'present' : 'missing',
+  });
+
   if (!current.accounts.activeAccountId) {
-    console.log('[DEBUG] No active account selected')
+    console.log('[DEBUG] No active account selected');
     store.update((state) => ({
       ...state,
       launcherStatus: translate('home.status.accountRequired'),
-    }))
-    return
+    }));
+    return;
   }
   if (current.launching || current.clientRunning) {
-    console.log('[DEBUG] Already launching, skipping')
-    return
+    console.log('[DEBUG] Already launching, skipping');
+    return;
   }
 
   store.update((state) => {
@@ -460,99 +462,106 @@ async function launch(): Promise<void> {
       ...state,
       launching: true,
       launcherStatus: translate('home.status.launching'),
-    }
-  })
+    };
+  });
 
-  const showLogs = current.config?.showLogsOnLaunch ?? true
+  const showLogs = current.config?.showLogsOnLaunch ?? true;
   if (showLogs) {
-    console.log('[DEBUG] Opening log window')
-    window.shindo.openLogWindow().catch((error) => console.error('Failed to open log window', error))
+    console.log('[DEBUG] Opening log window');
+    window.shindo
+      .openLogWindow()
+      .catch((error) => console.error('Failed to open log window', error));
   }
 
   try {
-    const config = get(store).config
-    console.log('[DEBUG] Config:', config)
+    const config = get(store).config;
+    console.log('[DEBUG] Config:', config);
     const options = config
       ? {
           memory: { max: `${Math.max(1, config.ramGB)}G` },
           build: config.selectedBuild ?? null,
         }
-      : undefined
+      : undefined;
 
-    console.log('[DEBUG] Calling window.shindo.launchClient with options:', options)
-    const result = await window.shindo.launchClient(options)
-    console.log('[DEBUG] launchClient result:', result)
-    
+    console.log('[DEBUG] Calling window.shindo.launchClient with options:', options);
+    const result = await window.shindo.launchClient(options);
+    console.log('[DEBUG] launchClient result:', result);
+
     const summary = result.pid
       ? translate('home.status.startedPid', { pid: result.pid })
-      : translate('home.status.started')
-    store.update((state) => ({ ...state, launcherStatus: summary, clientRunning: Boolean(result.pid) }))
+      : translate('home.status.started');
+    store.update((state) => ({
+      ...state,
+      launcherStatus: summary,
+      clientRunning: Boolean(result.pid),
+    }));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error('[DEBUG] Failed to launch client', error)
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[DEBUG] Failed to launch client', error);
     store.update((state) => ({
       ...state,
       launcherStatus: translate('home.status.failed', { message }),
-    }))
+    }));
   }
 
-  store.update((state) => ({ ...state, launching: false }))
+  store.update((state) => ({ ...state, launching: false }));
 }
 
 async function stopClient(): Promise<boolean> {
   try {
-    const stopped = await window.shindo.stopClient()
+    const stopped = await window.shindo.stopClient();
     if (stopped) {
       store.update((state) => ({
         ...state,
-        launcherStatus: state.config?.language === 'pt' ? 'Encerrando cliente...' : 'Stopping client...',
-      }))
+        launcherStatus:
+          state.config?.language === 'pt' ? 'Encerrando cliente...' : 'Stopping client...',
+      }));
     }
-    return stopped
+    return stopped;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error ? error.message : String(error);
     store.update((state) => ({
       ...state,
       launcherStatus: translate('home.status.failed', { message }),
-    }))
-    return false
+    }));
+    return false;
   }
 }
 
 export const appStore = {
   subscribe: store.subscribe,
   init: async () => {
-    const state = get(store)
-    if (state.initializing) return
+    const state = get(store);
+    if (state.initializing) return;
 
-    store.update((prev) => ({ ...prev, initializing: true }))
-    registerListeners()
+    store.update((prev) => ({ ...prev, initializing: true }));
+    registerListeners();
 
     try {
       const [config, systemMemory] = await Promise.all([
         window.shindo.getConfig(),
         window.shindo.getSystemMemory(),
-      ])
+      ]);
 
       if (config.language) {
-        setLanguage(config.language as Language)
+        setLanguage(config.language as Language);
       }
-      store.update((prev) => ({ ...prev, config, systemMemory }))
+      store.update((prev) => ({ ...prev, config, systemMemory }));
     } finally {
-      store.update((prev) => ({ ...prev, initializing: false }))
+      store.update((prev) => ({ ...prev, initializing: false }));
     }
 
-    await refreshClientState()
-    await refreshVersionCatalog()
+    await refreshClientState();
+    await refreshVersionCatalog();
     try {
-      await refreshAccounts()
+      await refreshAccounts();
     } catch (error) {
-      console.error('Falha ao carregar contas', error)
+      console.error('Falha ao carregar contas', error);
     }
-    await startUpdate()
+    await startUpdate();
   },
   setScreen: (screen: Screen) => {
-    store.update((state) => ({ ...state, screen }))
+    store.update((state) => ({ ...state, screen }));
   },
   applyConfigPatch,
   startUpdate,
@@ -564,6 +573,6 @@ export const appStore = {
   removeAccount,
   selectAccount,
   get state() {
-    return get(store)
+    return get(store);
   },
-}
+};

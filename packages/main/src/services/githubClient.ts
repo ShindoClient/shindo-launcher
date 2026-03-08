@@ -19,7 +19,10 @@ type FetchResponse = {
 type FetchFn = (input: string, init?: Record<string, unknown>) => Promise<FetchResponse>;
 
 export class GitHubHttpError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
     super(message);
     this.name = 'GitHubHttpError';
   }
@@ -52,7 +55,10 @@ async function requestJson<T>(url: string): Promise<T> {
 async function ensureOk(response: FetchResponse, errorPrefix: string): Promise<void> {
   if (response.ok) return;
   const body = await response.text();
-  throw new GitHubHttpError(response.status, `${errorPrefix}: ${response.status} ${response.statusText} :: ${body}`);
+  throw new GitHubHttpError(
+    response.status,
+    `${errorPrefix}: ${response.status} ${response.statusText} :: ${body}`,
+  );
 }
 
 export interface GitHubAsset {

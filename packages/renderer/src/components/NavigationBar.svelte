@@ -1,38 +1,20 @@
 <script lang="ts">
-  import Home from 'lucide-svelte/icons/home'
-  import Settings from 'lucide-svelte/icons/settings'
-  import { appStore } from '../store/appStore'
-  import { t } from '../i18n'
+  import Home from 'lucide-svelte/icons/home';
+  import Settings from 'lucide-svelte/icons/settings';
+  import { appStore } from '../store/appStore';
+  import { t } from '../i18n';
 
-  const { setScreen } = appStore
+  const { setScreen } = appStore;
 
   const NAV_ITEMS: Array<{ id: 'home' | 'settings'; label: string }> = [
     { id: 'home', label: 'nav.home' },
     { id: 'settings', label: 'nav.settings' },
-  ]
+  ];
 
   function getIcon(id: 'home' | 'settings') {
-    return id === 'home' ? Home : Settings
+    return id === 'home' ? Home : Settings;
   }
 </script>
-
-<nav class="navigation-bar">
-  <div class="navigation-inner">
-    {#each NAV_ITEMS as item}
-      <button
-        type="button"
-        class="nav-item"
-        class:active={$appStore.screen === item.id}
-        on:click={() => setScreen(item.id)}
-      >
-        <span class="nav-icon">
-          <svelte:component this={getIcon(item.id)} />
-        </span>
-        <span>{$t(item.label)}</span>
-      </button>
-    {/each}
-  </div>
-</nav>
 
 <style>
   .navigation-bar {
@@ -92,3 +74,21 @@
     height: 14px;
   }
 </style>
+
+<nav class="navigation-bar">
+  <div class="navigation-inner">
+    {#each NAV_ITEMS as item}
+      <button
+        type="button"
+        class="nav-item"
+        class:active={$appStore.screen === item.id}
+        on:click={() => setScreen(item.id)}
+      >
+        <span class="nav-icon">
+          <svelte:component this={getIcon(item.id)} />
+        </span>
+        <span>{$t(item.label)}</span>
+      </button>
+    {/each}
+  </div>
+</nav>

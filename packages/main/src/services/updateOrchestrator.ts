@@ -1,5 +1,11 @@
 import { BrowserWindow } from 'electron';
-import { IpcEvent, type UpdateStep, type ClientUpdatePayload, type LauncherUpdateInfoPayload, type LauncherUpdateResultPayload } from '@shindo/shared';
+import {
+  IpcEvent,
+  type UpdateStep,
+  type ClientUpdatePayload,
+  type LauncherUpdateInfoPayload,
+  type LauncherUpdateResultPayload,
+} from '@shindo/shared';
 import type { LauncherService } from './launcherService';
 import { loadConfig, updateConfig } from './configService';
 import { ensureJre, type EnsureJreResult } from './jreManager';
@@ -65,7 +71,9 @@ export async function runStartupUpdateSequence(service: LauncherService): Promis
         percent: 90,
         action: async () => {
           if (launcherDownloadResult?.updateAvailable) {
-            const applied = await service.applyLauncherUpdate(launcherDownloadResult.downloadedPath ?? null);
+            const applied = await service.applyLauncherUpdate(
+              launcherDownloadResult.downloadedPath ?? null,
+            );
             if (applied) {
               emit(IpcEvent.UpdateCompleted, { success: true });
               return true;
@@ -76,7 +84,8 @@ export async function runStartupUpdateSequence(service: LauncherService): Promis
       });
       phases.push({
         step: 'launcher-update',
-        message: () => `Atualizacao do launcher preparada (${launcherInfo.latestVersion ?? 'nova versao'}).`,
+        message: () =>
+          `Atualizacao do launcher preparada (${launcherInfo.latestVersion ?? 'nova versao'}).`,
         percent: 100,
       });
     } else {
@@ -143,7 +152,10 @@ export async function runStartupUpdateSequence(service: LauncherService): Promis
         unsubscribe = onLauncherDownloadProgress((progress) => {
           const percentValue =
             typeof progress.percent === 'number'
-              ? Math.max(0, Math.min(phase.percent, Math.round((progress.percent / 100) * phase.percent)))
+              ? Math.max(
+                  0,
+                  Math.min(phase.percent, Math.round((progress.percent / 100) * phase.percent)),
+                )
               : phase.percent;
           const messageWithPercent =
             typeof progress.percent === 'number'

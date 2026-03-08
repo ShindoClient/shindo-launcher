@@ -22,13 +22,17 @@ import type {
   LaunchLogEntry,
 } from '@shindo/shared';
 
-type EventPayload<T extends IpcEvent> =
-  T extends IpcEvent.UpdateProgress ? UpdateProgressPayload :
-  T extends IpcEvent.UpdateCompleted ? UpdateCompletionPayload :
-  T extends IpcEvent.UpdateError ? UpdateErrorPayload :
-  T extends IpcEvent.LaunchLog ? LaunchLogPayload :
-  T extends IpcEvent.LaunchExit ? LaunchExitPayload :
-  never;
+type EventPayload<T extends IpcEvent> = T extends IpcEvent.UpdateProgress
+  ? UpdateProgressPayload
+  : T extends IpcEvent.UpdateCompleted
+    ? UpdateCompletionPayload
+    : T extends IpcEvent.UpdateError
+      ? UpdateErrorPayload
+      : T extends IpcEvent.LaunchLog
+        ? LaunchLogPayload
+        : T extends IpcEvent.LaunchExit
+          ? LaunchExitPayload
+          : never;
 
 function registerEvent<T extends IpcEvent>(
   channel: T,
@@ -44,38 +48,26 @@ function registerEvent<T extends IpcEvent>(
 const bridge: LauncherBridge = {
   ensureClientUpToDate: (options) =>
     ipcRenderer.invoke(IpcChannel.EnsureClient, options) as Promise<ClientUpdatePayload>,
-  getClientState: () =>
-    ipcRenderer.invoke(IpcChannel.ClientState) as Promise<ClientStatePayload>,
+  getClientState: () => ipcRenderer.invoke(IpcChannel.ClientState) as Promise<ClientStatePayload>,
   checkLauncherUpdate: () =>
     ipcRenderer.invoke(IpcChannel.LauncherCheckUpdate) as Promise<LauncherUpdateInfoPayload>,
   downloadLauncherUpdate: () =>
     ipcRenderer.invoke(IpcChannel.LauncherDownloadUpdate) as Promise<LauncherUpdateResultPayload>,
   launchClient: (options?: LaunchClientOptionsPayload) =>
     ipcRenderer.invoke(IpcChannel.LaunchStart, options) as Promise<LaunchClientResultPayload>,
-  stopClient: () =>
-    ipcRenderer.invoke(IpcChannel.LaunchStop) as Promise<boolean>,
-  getConfig: () =>
-    ipcRenderer.invoke(IpcChannel.ConfigGet) as Promise<LauncherConfig>,
-  setConfig: (patch) =>
-    ipcRenderer.invoke(IpcChannel.ConfigSet, patch) as Promise<LauncherConfig>,
-  getSystemMemory: () =>
-    ipcRenderer.invoke(IpcChannel.SystemMemory) as Promise<SystemMemoryInfo>,
-  runStartupUpdate: () =>
-    ipcRenderer.invoke(IpcChannel.RunStartupUpdate) as Promise<void>,
-  getVersion: () =>
-    ipcRenderer.invoke(IpcChannel.AppVersion) as Promise<string>,
-  getLaunchLogs: () =>
-    ipcRenderer.invoke(IpcChannel.LaunchLogHistory) as Promise<LaunchLogEntry[]>,
-  clearLaunchLogs: () =>
-    ipcRenderer.invoke(IpcChannel.LaunchLogClear) as Promise<void>,
+  stopClient: () => ipcRenderer.invoke(IpcChannel.LaunchStop) as Promise<boolean>,
+  getConfig: () => ipcRenderer.invoke(IpcChannel.ConfigGet) as Promise<LauncherConfig>,
+  setConfig: (patch) => ipcRenderer.invoke(IpcChannel.ConfigSet, patch) as Promise<LauncherConfig>,
+  getSystemMemory: () => ipcRenderer.invoke(IpcChannel.SystemMemory) as Promise<SystemMemoryInfo>,
+  runStartupUpdate: () => ipcRenderer.invoke(IpcChannel.RunStartupUpdate) as Promise<void>,
+  getVersion: () => ipcRenderer.invoke(IpcChannel.AppVersion) as Promise<string>,
+  getLaunchLogs: () => ipcRenderer.invoke(IpcChannel.LaunchLogHistory) as Promise<LaunchLogEntry[]>,
+  clearLaunchLogs: () => ipcRenderer.invoke(IpcChannel.LaunchLogClear) as Promise<void>,
   getVersionCatalog: () =>
     ipcRenderer.invoke(IpcChannel.VersionCatalog) as Promise<VersionCatalogPayload>,
-  openLogWindow: () =>
-    ipcRenderer.invoke(IpcChannel.LogWindowOpen) as Promise<void>,
-  closeLogWindow: () =>
-    ipcRenderer.invoke(IpcChannel.LogWindowClose) as Promise<void>,
-  getAccounts: () =>
-    ipcRenderer.invoke(IpcChannel.AccountsList) as Promise<AccountsStatePayload>,
+  openLogWindow: () => ipcRenderer.invoke(IpcChannel.LogWindowOpen) as Promise<void>,
+  closeLogWindow: () => ipcRenderer.invoke(IpcChannel.LogWindowClose) as Promise<void>,
+  getAccounts: () => ipcRenderer.invoke(IpcChannel.AccountsList) as Promise<AccountsStatePayload>,
   addOfflineAccount: (payload: OfflineAccountRequestPayload) =>
     ipcRenderer.invoke(IpcChannel.AccountsAddOffline, payload) as Promise<AccountsStatePayload>,
   addMicrosoftAccount: () =>
@@ -84,10 +76,8 @@ const bridge: LauncherBridge = {
     ipcRenderer.invoke(IpcChannel.AccountsRemove, payload) as Promise<AccountsStatePayload>,
   selectAccount: (payload: AccountSelectionPayload) =>
     ipcRenderer.invoke(IpcChannel.AccountsSelect, payload) as Promise<AccountsStatePayload>,
-  minimizeWindow: () =>
-    ipcRenderer.invoke(IpcChannel.WindowMinimize) as Promise<void>,
-  closeWindow: () =>
-    ipcRenderer.invoke(IpcChannel.WindowClose) as Promise<void>,
+  minimizeWindow: () => ipcRenderer.invoke(IpcChannel.WindowMinimize) as Promise<void>,
+  closeWindow: () => ipcRenderer.invoke(IpcChannel.WindowClose) as Promise<void>,
   onUpdateProgress: (callback) => registerEvent(IpcEvent.UpdateProgress, callback),
   onUpdateCompleted: (callback) => registerEvent(IpcEvent.UpdateCompleted, callback),
   onUpdateError: (callback) => registerEvent(IpcEvent.UpdateError, callback),

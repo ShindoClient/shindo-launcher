@@ -1,62 +1,69 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import { buffer } from 'node:stream/consumers'
-import { pipeline } from 'node:stream/promises'
-import AdmZip from 'adm-zip'
+import fs from 'node:fs';
+import path from 'node:path';
+import { buffer } from 'node:stream/consumers';
+import { pipeline } from 'node:stream/promises';
+import AdmZip from 'adm-zip';
 import type {
   ClientStatePayload,
   ClientUpdatePayload,
   ReleaseAssetInfo,
   ReleaseInfo,
   VersionCatalogPayload,
-} from '@shindo/shared'
-import { distributionConfig, resolveClientRepo, sanitizeVersionId } from '../config/distributionConfig'
-import { getBaseDataDir, getTempDir, getVersionsDir } from '../utils/pathResolver'
-import { downloadFromUrl, loadRemoteVersionText, loadVersionCatalogFromCdn, resolveClientVersionFromCdn } from './cdnClient'
-import { downloadAsset, fetchLatestRelease, GitHubAsset, GitHubRelease } from './githubClient'
-import { loadConfig } from './configService'
+} from '@shindo/shared';
+import {
+  distributionConfig,
+  resolveClientRepo,
+  sanitizeVersionId,
+} from '../config/distributionConfig';
+import { getBaseDataDir, getTempDir, getVersionsDir } from '../utils/pathResolver';
+import {
+  downloadFromUrl,
+  loadRemoteVersionText,
+  loadVersionCatalogFromCdn,
+  resolveClientVersionFromCdn,
+} from './cdnClient';
+import { downloadAsset, fetchLatestRelease, GitHubAsset, GitHubRelease } from './githubClient';
+import { loadConfig } from './configService';
 
-const VERSION_FILE_ENCODING: BufferEncoding = 'utf8'
-const VERSION_MARKER_NAME = '.client-version'
-const LEGACY_VERSION_FILE_NAME = 'version.txt'
+const VERSION_FILE_ENCODING: BufferEncoding = 'utf8';
+const VERSION_MARKER_NAME = '.client-version';
+const LEGACY_VERSION_FILE_NAME = 'version.txt';
 
 export interface EnsureClientOptions {
-  force?: boolean
-  versionId?: string
-  build?: number | null
+  force?: boolean;
+  versionId?: string;
+  build?: number | null;
 }
 
 interface ClientStorageLayout {
-  versionId: string
-  clientDir: string
-  versionMarkerFile: string
+  versionId: string;
+  clientDir: string;
+  versionMarkerFile: string;
 }
 
 interface ResolvedClientSource {
-  provider: 'cdn' | 'github'
-  versionId: string
-  packageUrl: string
-  remoteVersion: string
-  buildNumber?: number | null
-  jarUrl?: string | null
-  legacyJarUrl?: string | null
-  baseVersion?: string | null
-  assetsIndex?: string | null
-  hintedVersionJsonPath?: string | null
-  release?: ReleaseInfo
+  provider: 'cdn' | 'github';
+  versionId: string;
+  packageUrl: string;
+  remoteVersion: string;
+  buildNumber?: number | null;
+  jarUrl?: string | null;
+  legacyJarUrl?: string | null;
+  baseVersion?: string | null;
+  assetsIndex?: string | null;
+  hintedVersionJsonPath?: string | null;
+  release?: ReleaseInfo;
 }
 
 interface ParsedClientJson {
-  baseVersion: string | null
-  id: string
-  assets: string | null
+  baseVersion: string | null;
+  id: string;
+  assets: string | null;
 }
 
 function findAssetByName(assets: GitHubAsset[], names: string[]): GitHubAsset | null {
-  const normalized = names.map((item) => item.toLowerCase())
-  return (
-    assets.find((asset) => normalized.includes(asset.name?.toLowerCase() ?? '')) ?? null
-  )
+  const normalized = names.map((item) => item.toLowerCase());
+  return assets.find((asset) => normalized.includes(asset.name?.toLowerCase() ?? '')) ?? null;
 }
 
 function buildVersionAssetCandidates(versionId: string): string[] {
@@ -64,14 +71,11 @@ function buildVersionAssetCandidates(versionId: string): string[] {
     `version-${versionId}.txt`,
     `${versionId}.version.txt`,
     distributionConfig.client.defaultVersionAssetName,
-  ]
+  ];
 }
 
 function buildPackageAssetCandidates(versionId: string): string[] {
-  return [
-    `${versionId}.zip`,
-    distributionConfig.client.defaultPackageAssetName,
-  ]
+  return [`${versionId}.zip`, distributionConfig.client.defaultPackageAssetName];
 }
 
 function mapAsset(asset: GitHubAsset): ReleaseAssetInfo {
@@ -80,7 +84,7 @@ function mapAsset(asset: GitHubAsset): ReleaseAssetInfo {
     downloadUrl: asset.browser_download_url,
     size: asset.size,
     contentType: asset.content_type,
-  }
+  };
 }
 
 function mapRelease(release: GitHubRelease): ReleaseInfo {
@@ -92,166 +96,179 @@ function mapRelease(release: GitHubRelease): ReleaseInfo {
     url: release.html_url,
     publishedAt: release.published_at,
     assets: (release.assets ?? []).map(mapAsset),
-  }
+  };
 }
 
 function resolveStorageLayout(versionIdInput?: string): ClientStorageLayout {
-  const fallbackVersion = loadConfig().versionId
-  const versionId = sanitizeVersionId(versionIdInput ?? fallbackVersion)
-  const clientDir = path.join(getVersionsDir(), versionId)
-  fs.mkdirSync(clientDir, { recursive: true })
+  const fallbackVersion = loadConfig().versionId;
+  const versionId = sanitizeVersionId(versionIdInput ?? fallbackVersion);
+  const clientDir = path.join(getVersionsDir(), versionId);
+  fs.mkdirSync(clientDir, { recursive: true });
   return {
     versionId,
     clientDir,
     versionMarkerFile: path.join(clientDir, VERSION_MARKER_NAME),
-  }
+  };
 }
 
 function readLegacyVersionMarker(versionId: string): string | null {
   if (versionId !== distributionConfig.client.defaultVersionId) {
-    return null
+    return null;
   }
 
-  const legacy = path.join(getBaseDataDir(), LEGACY_VERSION_FILE_NAME)
+  const legacy = path.join(getBaseDataDir(), LEGACY_VERSION_FILE_NAME);
   if (!fs.existsSync(legacy)) {
-    return null
+    return null;
   }
 
-  const value = fs.readFileSync(legacy, VERSION_FILE_ENCODING).trim()
-  return value.length > 0 ? value : null
+  const value = fs.readFileSync(legacy, VERSION_FILE_ENCODING).trim();
+  return value.length > 0 ? value : null;
 }
 
 function readLocalVersion(versionFile: string, versionId: string): string | null {
   if (fs.existsSync(versionFile)) {
-    const value = fs.readFileSync(versionFile, VERSION_FILE_ENCODING).trim()
-    return value.length > 0 ? value : null
+    const value = fs.readFileSync(versionFile, VERSION_FILE_ENCODING).trim();
+    return value.length > 0 ? value : null;
   }
-  return readLegacyVersionMarker(versionId)
+  return readLegacyVersionMarker(versionId);
 }
 
 function writeLocalVersion(versionFile: string, version: string): void {
-  fs.writeFileSync(versionFile, `${version}\n`, VERSION_FILE_ENCODING)
+  fs.writeFileSync(versionFile, `${version}\n`, VERSION_FILE_ENCODING);
 }
 
 function resolveHintedVersionJson(clientDir: string, hintedPath: string): string | null {
-  const normalized = hintedPath.trim()
-  if (!normalized) return null
+  const normalized = hintedPath.trim();
+  if (!normalized) return null;
 
-  const asAbsolute = path.isAbsolute(normalized) ? normalized : path.join(clientDir, normalized)
-  return fs.existsSync(asAbsolute) ? asAbsolute : null
+  const asAbsolute = path.isAbsolute(normalized) ? normalized : path.join(clientDir, normalized);
+  return fs.existsSync(asAbsolute) ? asAbsolute : null;
 }
 
-function locateVersionJson(clientDir: string, versionId: string, hintedPath?: string | null): string | null {
+function locateVersionJson(
+  clientDir: string,
+  versionId: string,
+  hintedPath?: string | null,
+): string | null {
   if (hintedPath) {
-    const hinted = resolveHintedVersionJson(clientDir, hintedPath)
-    if (hinted) return hinted
+    const hinted = resolveHintedVersionJson(clientDir, hintedPath);
+    if (hinted) return hinted;
   }
 
   const directCandidates = [
     path.join(clientDir, `${versionId}.json`),
     path.join(clientDir, 'ShindoClient.json'),
-  ]
+  ];
 
   for (const candidate of directCandidates) {
     if (fs.existsSync(candidate)) {
-      return candidate
+      return candidate;
     }
   }
 
-  const queue: string[] = [clientDir]
+  const queue: string[] = [clientDir];
   while (queue.length > 0) {
-    const current = queue.shift()
-    if (!current) continue
-    const entries = fs.readdirSync(current, { withFileTypes: true })
+    const current = queue.shift();
+    if (!current) continue;
+    const entries = fs.readdirSync(current, { withFileTypes: true });
     for (const entry of entries) {
-      const full = path.join(current, entry.name)
+      const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        queue.push(full)
-        continue
+        queue.push(full);
+        continue;
       }
       if (!entry.name.toLowerCase().endsWith('.json')) {
-        continue
+        continue;
       }
       if (entry.name === `${versionId}.json` || entry.name === 'ShindoClient.json') {
-        return full
+        return full;
       }
     }
   }
 
-  return null
+  return null;
 }
 
 function readJsonRecord(filePath: string): Record<string, unknown> | null {
   try {
-    const content = fs.readFileSync(filePath, VERSION_FILE_ENCODING)
-    const parsed = JSON.parse(content) as unknown
-    if (!parsed || typeof parsed !== 'object') return null
-    return parsed as Record<string, unknown>
+    const content = fs.readFileSync(filePath, VERSION_FILE_ENCODING);
+    const parsed = JSON.parse(content) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as Record<string, unknown>;
   } catch {
-    return null
+    return null;
   }
 }
 
 function findJarByName(clientDir: string, expectedName: string): string | null {
-  const queue: string[] = [clientDir]
+  const queue: string[] = [clientDir];
   while (queue.length > 0) {
-    const current = queue.shift()
-    if (!current) continue
+    const current = queue.shift();
+    if (!current) continue;
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name)
+      const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        queue.push(full)
-        continue
+        queue.push(full);
+        continue;
       }
       if (entry.name === expectedName) {
-        return full
+        return full;
       }
     }
   }
-  return null
+  return null;
 }
 
 function findAnyJar(clientDir: string): string | null {
-  const queue: string[] = [clientDir]
+  const queue: string[] = [clientDir];
   while (queue.length > 0) {
-    const current = queue.shift()
-    if (!current) continue
+    const current = queue.shift();
+    if (!current) continue;
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name)
+      const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        queue.push(full)
-        continue
+        queue.push(full);
+        continue;
       }
       if (entry.name.toLowerCase().endsWith('.jar')) {
-        return full
+        return full;
       }
     }
   }
-  return null
+  return null;
 }
 
-function normalizeVersionLayout(clientDir: string, versionId: string, hintedPath?: string | null): string | null {
-  const locatedJson = locateVersionJson(clientDir, versionId, hintedPath)
-  if (!locatedJson) return null
+function normalizeVersionLayout(
+  clientDir: string,
+  versionId: string,
+  hintedPath?: string | null,
+): string | null {
+  const locatedJson = locateVersionJson(clientDir, versionId, hintedPath);
+  if (!locatedJson) return null;
 
-  const payload = readJsonRecord(locatedJson)
-  if (!payload) return locatedJson
+  const payload = readJsonRecord(locatedJson);
+  if (!payload) return locatedJson;
 
-  const canonicalJsonPath = path.join(clientDir, `${versionId}.json`)
-  const currentId = typeof payload.id === 'string' ? payload.id : null
+  const canonicalJsonPath = path.join(clientDir, `${versionId}.json`);
+  const currentId = typeof payload.id === 'string' ? payload.id : null;
   const normalizedPayload: Record<string, unknown> = {
     ...payload,
     id: versionId,
-  }
+  };
 
   if (locatedJson !== canonicalJsonPath || currentId !== versionId) {
-    fs.writeFileSync(canonicalJsonPath, JSON.stringify(normalizedPayload, null, 2), VERSION_FILE_ENCODING)
+    fs.writeFileSync(
+      canonicalJsonPath,
+      JSON.stringify(normalizedPayload, null, 2),
+      VERSION_FILE_ENCODING,
+    );
   }
 
-  const jarToken = typeof payload.jar === 'string' && payload.jar.trim().length > 0
-    ? payload.jar.trim()
-    : (currentId || 'ShindoClient')
-  const canonicalJarPath = path.join(clientDir, `${versionId}.jar`)
+  const jarToken =
+    typeof payload.jar === 'string' && payload.jar.trim().length > 0
+      ? payload.jar.trim()
+      : currentId || 'ShindoClient';
+  const canonicalJarPath = path.join(clientDir, `${versionId}.jar`);
   const jarCandidates = [
     path.join(path.dirname(locatedJson), `${jarToken}.jar`),
     path.join(path.dirname(locatedJson), `${currentId ?? ''}.jar`),
@@ -260,57 +277,59 @@ function normalizeVersionLayout(clientDir: string, versionId: string, hintedPath
     findJarByName(clientDir, `${currentId ?? ''}.jar`),
     findJarByName(clientDir, 'ShindoClient.jar'),
     findAnyJar(clientDir),
-  ].filter((candidate): candidate is string => Boolean(candidate && fs.existsSync(candidate)))
+  ].filter((candidate): candidate is string => Boolean(candidate && fs.existsSync(candidate)));
 
   if (!fs.existsSync(canonicalJarPath) && jarCandidates.length > 0) {
-    fs.copyFileSync(jarCandidates[0], canonicalJarPath)
+    fs.copyFileSync(jarCandidates[0], canonicalJarPath);
   }
 
-  return fs.existsSync(canonicalJsonPath) ? canonicalJsonPath : locatedJson
+  return fs.existsSync(canonicalJsonPath) ? canonicalJsonPath : locatedJson;
 }
 
 function parseClientJson(jsonPath: string | null, fallbackVersionId: string): ParsedClientJson {
   if (!jsonPath || !fs.existsSync(jsonPath)) {
-    return { baseVersion: null, id: fallbackVersionId, assets: null }
+    return { baseVersion: null, id: fallbackVersionId, assets: null };
   }
 
-  const content = fs.readFileSync(jsonPath, VERSION_FILE_ENCODING)
+  const content = fs.readFileSync(jsonPath, VERSION_FILE_ENCODING);
   const data = JSON.parse(content) as {
-    inheritsFrom?: string
-    minecraftVersion?: string
-    id?: string
-    assets?: string
-  }
+    inheritsFrom?: string;
+    minecraftVersion?: string;
+    id?: string;
+    assets?: string;
+  };
 
-  const baseVersion = data.inheritsFrom ?? data.minecraftVersion ?? null
-  const id = data.id ?? fallbackVersionId
-  const assets = data.assets ?? null
-  return { baseVersion, id, assets }
+  const baseVersion = data.inheritsFrom ?? data.minecraftVersion ?? null;
+  const id = data.id ?? fallbackVersionId;
+  const assets = data.assets ?? null;
+  return { baseVersion, id, assets };
 }
 
 async function downloadZip(url: string, destinationFile: string): Promise<void> {
-  const stream = await downloadFromUrl(url)
-  const writeStream = fs.createWriteStream(destinationFile)
-  await pipeline(stream, writeStream)
+  const stream = await downloadFromUrl(url);
+  const writeStream = fs.createWriteStream(destinationFile);
+  await pipeline(stream, writeStream);
 }
 
 async function extractZip(zipFile: string, destinationDir: string): Promise<void> {
-  const zip = new AdmZip(zipFile)
-  zip.extractAllTo(destinationDir, true)
+  const zip = new AdmZip(zipFile);
+  zip.extractAllTo(destinationDir, true);
 }
 
-async function resolveFromCdn(versionId: string, build?: number | null): Promise<ResolvedClientSource | null> {
-  const entry = await resolveClientVersionFromCdn(versionId, build)
+async function resolveFromCdn(
+  versionId: string,
+  build?: number | null,
+): Promise<ResolvedClientSource | null> {
+  const entry = await resolveClientVersionFromCdn(versionId, build);
   if (!entry?.packageUrl) {
-    return null
+    return null;
   }
 
   const remoteVersion =
-    entry.buildVersion ??
-    (entry.versionUrl ? await loadRemoteVersionText(entry.versionUrl) : null)
+    entry.buildVersion ?? (entry.versionUrl ? await loadRemoteVersionText(entry.versionUrl) : null);
 
   if (!remoteVersion) {
-    return null
+    return null;
   }
 
   return {
@@ -324,28 +343,28 @@ async function resolveFromCdn(versionId: string, build?: number | null): Promise
     baseVersion: entry.baseVersion,
     assetsIndex: entry.assetsIndex,
     hintedVersionJsonPath: entry.versionJsonPath,
-  }
+  };
 }
 
 async function loadRemoteVersionFromAsset(asset: GitHubAsset): Promise<string> {
-  const stream = await downloadAsset(asset.browser_download_url)
-  const buf = await buffer(stream)
-  return buf.toString(VERSION_FILE_ENCODING).trim()
+  const stream = await downloadAsset(asset.browser_download_url);
+  const buf = await buffer(stream);
+  return buf.toString(VERSION_FILE_ENCODING).trim();
 }
 
 async function resolveFromGithub(versionId: string): Promise<ResolvedClientSource> {
-  const repo = resolveClientRepo(versionId)
-  const release = await fetchLatestRelease(repo)
-  const assets = release.assets ?? []
+  const repo = resolveClientRepo(versionId);
+  const release = await fetchLatestRelease(repo);
+  const assets = release.assets ?? [];
 
-  const versionAsset = findAssetByName(assets, buildVersionAssetCandidates(versionId))
-  const zipAsset = findAssetByName(assets, buildPackageAssetCandidates(versionId))
+  const versionAsset = findAssetByName(assets, buildVersionAssetCandidates(versionId));
+  const zipAsset = findAssetByName(assets, buildPackageAssetCandidates(versionId));
 
   if (!versionAsset || !zipAsset) {
-    throw new Error(`Release assets for version ${versionId} not found in ${repo}`)
+    throw new Error(`Release assets for version ${versionId} not found in ${repo}`);
   }
 
-  const remoteVersion = await loadRemoteVersionFromAsset(versionAsset)
+  const remoteVersion = await loadRemoteVersionFromAsset(versionAsset);
 
   return {
     provider: 'github',
@@ -353,16 +372,19 @@ async function resolveFromGithub(versionId: string): Promise<ResolvedClientSourc
     packageUrl: zipAsset.browser_download_url,
     remoteVersion,
     release: mapRelease(release),
-  }
+  };
 }
 
-async function resolveClientSource(versionId: string, build?: number | null): Promise<ResolvedClientSource> {
-  const fromCdn = await resolveFromCdn(versionId, build)
+async function resolveClientSource(
+  versionId: string,
+  build?: number | null,
+): Promise<ResolvedClientSource> {
+  const fromCdn = await resolveFromCdn(versionId, build);
   if (fromCdn) {
-    return fromCdn
+    return fromCdn;
   }
 
-  return resolveFromGithub(versionId)
+  return resolveFromGithub(versionId);
 }
 
 async function ensureCanonicalJarFromRemote(
@@ -371,18 +393,20 @@ async function ensureCanonicalJarFromRemote(
   jarUrl?: string | null,
   legacyJarUrl?: string | null,
 ): Promise<void> {
-  const canonicalJarPath = path.join(clientDir, `${versionId}.jar`)
-  if (fs.existsSync(canonicalJarPath)) return
+  const canonicalJarPath = path.join(clientDir, `${versionId}.jar`);
+  if (fs.existsSync(canonicalJarPath)) return;
 
-  const candidateUrls = [jarUrl, legacyJarUrl].filter((value): value is string => Boolean(value && value.trim()))
-  if (candidateUrls.length === 0) return
+  const candidateUrls = [jarUrl, legacyJarUrl].filter((value): value is string =>
+    Boolean(value && value.trim()),
+  );
+  if (candidateUrls.length === 0) return;
 
   for (const candidateUrl of candidateUrls) {
     try {
-      const stream = await downloadFromUrl(candidateUrl)
-      await pipeline(stream, fs.createWriteStream(canonicalJarPath))
+      const stream = await downloadFromUrl(candidateUrl);
+      await pipeline(stream, fs.createWriteStream(canonicalJarPath));
       if (fs.existsSync(canonicalJarPath) && fs.statSync(canonicalJarPath).size > 0) {
-        return
+        return;
       }
     } catch {
       // try next candidate
@@ -390,22 +414,28 @@ async function ensureCanonicalJarFromRemote(
   }
 }
 
-export async function ensureClientUpToDate(
-  { force = false, versionId: requestedVersionId, build }: EnsureClientOptions = {},
-): Promise<ClientUpdatePayload> {
-  const layout = resolveStorageLayout(requestedVersionId)
-  const source = await resolveClientSource(layout.versionId, build)
-  const localVersion = readLocalVersion(layout.versionMarkerFile, layout.versionId)
+export async function ensureClientUpToDate({
+  force = false,
+  versionId: requestedVersionId,
+  build,
+}: EnsureClientOptions = {}): Promise<ClientUpdatePayload> {
+  const layout = resolveStorageLayout(requestedVersionId);
+  const source = await resolveClientSource(layout.versionId, build);
+  const localVersion = readLocalVersion(layout.versionMarkerFile, layout.versionId);
 
   if (!force && localVersion && localVersion === source.remoteVersion) {
-    const jsonPath = normalizeVersionLayout(layout.clientDir, layout.versionId, source.hintedVersionJsonPath)
+    const jsonPath = normalizeVersionLayout(
+      layout.clientDir,
+      layout.versionId,
+      source.hintedVersionJsonPath,
+    );
     await ensureCanonicalJarFromRemote(
       layout.clientDir,
       layout.versionId,
       source.jarUrl,
       source.legacyJarUrl,
-    )
-    const parsed = parseClientJson(jsonPath, layout.versionId)
+    );
+    const parsed = parseClientJson(jsonPath, layout.versionId);
 
     return {
       updated: false,
@@ -417,27 +447,31 @@ export async function ensureClientUpToDate(
       clientPackagePath: null,
       assetsIndex: source.assetsIndex ?? parsed.assets,
       release: source.release,
-    }
+    };
   }
 
-  const tempDir = getTempDir()
-  const zipPath = path.join(tempDir, `${layout.versionId}-${source.remoteVersion}.zip`)
+  const tempDir = getTempDir();
+  const zipPath = path.join(tempDir, `${layout.versionId}-${source.remoteVersion}.zip`);
 
-  await downloadZip(source.packageUrl, zipPath)
-  fs.rmSync(layout.clientDir, { recursive: true, force: true })
-  fs.mkdirSync(layout.clientDir, { recursive: true })
-  await extractZip(zipPath, layout.clientDir)
-  fs.rmSync(zipPath, { force: true })
-  writeLocalVersion(layout.versionMarkerFile, source.remoteVersion)
+  await downloadZip(source.packageUrl, zipPath);
+  fs.rmSync(layout.clientDir, { recursive: true, force: true });
+  fs.mkdirSync(layout.clientDir, { recursive: true });
+  await extractZip(zipPath, layout.clientDir);
+  fs.rmSync(zipPath, { force: true });
+  writeLocalVersion(layout.versionMarkerFile, source.remoteVersion);
 
-  const jsonPath = normalizeVersionLayout(layout.clientDir, layout.versionId, source.hintedVersionJsonPath)
+  const jsonPath = normalizeVersionLayout(
+    layout.clientDir,
+    layout.versionId,
+    source.hintedVersionJsonPath,
+  );
   await ensureCanonicalJarFromRemote(
     layout.clientDir,
     layout.versionId,
     source.jarUrl,
     source.legacyJarUrl,
-  )
-  const parsed = parseClientJson(jsonPath, layout.versionId)
+  );
+  const parsed = parseClientJson(jsonPath, layout.versionId);
 
   return {
     updated: true,
@@ -449,14 +483,14 @@ export async function ensureClientUpToDate(
     clientPackagePath: null,
     assetsIndex: source.assetsIndex ?? parsed.assets,
     release: source.release,
-  }
+  };
 }
 
 export function getLocalClientState(options?: { versionId?: string }): ClientStatePayload {
-  const layout = resolveStorageLayout(options?.versionId)
-  const localVersion = readLocalVersion(layout.versionMarkerFile, layout.versionId)
-  const jsonPath = normalizeVersionLayout(layout.clientDir, layout.versionId)
-  const parsed = parseClientJson(jsonPath, layout.versionId)
+  const layout = resolveStorageLayout(options?.versionId);
+  const localVersion = readLocalVersion(layout.versionMarkerFile, layout.versionId);
+  const jsonPath = normalizeVersionLayout(layout.clientDir, layout.versionId);
+  const parsed = parseClientJson(jsonPath, layout.versionId);
 
   return {
     version: localVersion,
@@ -466,19 +500,19 @@ export function getLocalClientState(options?: { versionId?: string }): ClientSta
     versionJsonPath: jsonPath,
     clientPackagePath: null,
     assetsIndex: parsed.assets,
-  }
+  };
 }
 
 export async function getVersionCatalog(): Promise<VersionCatalogPayload> {
-  const remote = await loadVersionCatalogFromCdn()
+  const remote = await loadVersionCatalogFromCdn();
   if (remote && remote.entries.length > 0) {
-    return remote
+    return remote;
   }
 
-  const config = loadConfig()
-  const local = getLocalClientState({ versionId: config.versionId })
-  const buildNumber = local.version ? Number(local.version.replace(/[^\d]/g, '')) : null
-  const normalizedBuild = Number.isFinite(buildNumber) && (buildNumber ?? 0) > 0 ? buildNumber : 0
+  const config = loadConfig();
+  const local = getLocalClientState({ versionId: config.versionId });
+  const buildNumber = local.version ? Number(local.version.replace(/[^\d]/g, '')) : null;
+  const normalizedBuild = Number.isFinite(buildNumber) && (buildNumber ?? 0) > 0 ? buildNumber : 0;
 
   return {
     updatedAt: null,
@@ -511,5 +545,5 @@ export async function getVersionCatalog(): Promise<VersionCatalogPayload> {
           : [],
       },
     ],
-  }
+  };
 }

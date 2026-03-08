@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import type { AccountProfile, LauncherConfig, VersionCatalogEntry } from '@shindo/shared'
-  import ChevronDown from 'lucide-svelte/icons/chevron-down'
-  import ChevronUp from 'lucide-svelte/icons/chevron-up'
-  import Plus from 'lucide-svelte/icons/plus'
-  import Shield from 'lucide-svelte/icons/shield'
-  import Loader2 from 'lucide-svelte/icons/loader-2'
-  import User from 'lucide-svelte/icons/user'
-  import Trash2 from 'lucide-svelte/icons/trash-2'
-  import AlertTriangle from 'lucide-svelte/icons/alert-triangle'
-  import X from 'lucide-svelte/icons/x'
-  import { appStore } from '../store/appStore'
-  import { resolveVersionPresentation } from '../config/versionCatalog'
-  import bannerUrl from '../assets/Banner.png'
+  import { onMount } from 'svelte';
+  import type { AccountProfile, LauncherConfig, VersionCatalogEntry } from '@shindo/shared';
+  import ChevronDown from 'lucide-svelte/icons/chevron-down';
+  import ChevronUp from 'lucide-svelte/icons/chevron-up';
+  import Plus from 'lucide-svelte/icons/plus';
+  import Shield from 'lucide-svelte/icons/shield';
+  import Loader2 from 'lucide-svelte/icons/loader-2';
+  import User from 'lucide-svelte/icons/user';
+  import Trash2 from 'lucide-svelte/icons/trash-2';
+  import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
+  import X from 'lucide-svelte/icons/x';
+  import { appStore } from '../store/appStore';
+  import { resolveVersionPresentation } from '../config/versionCatalog';
+  import bannerUrl from '../assets/Banner.png';
 
   const {
     launch,
@@ -22,154 +22,154 @@
     removeAccount,
     addMicrosoftAccount,
     addOfflineAccount,
-  } = appStore
+  } = appStore;
 
-  $: state = $appStore
-  $: config = state.config
-  $: clientState = state.clientState
-  $: launching = state.launching
-  $: clientRunning = state.clientRunning
-  $: launcherStatus = state.launcherStatus
-  $: update = state.update
-  $: updateStatus = update.status
-  $: accountsState = $appStore.accounts
-  $: activeAccount = accountsState.entries.find((entry) => entry.id === accountsState.activeAccountId)
-  $: noAccountSelected = !activeAccount
-  $: canAddMore = accountsState.entries.length < accountsState.limit
-  $: isUpdating = updateStatus !== 'completed'
+  $: state = $appStore;
+  $: config = state.config;
+  $: clientState = state.clientState;
+  $: launching = state.launching;
+  $: clientRunning = state.clientRunning;
+  $: launcherStatus = state.launcherStatus;
+  $: update = state.update;
+  $: updateStatus = update.status;
+  $: accountsState = $appStore.accounts;
+  $: activeAccount = accountsState.entries.find(
+    (entry) => entry.id === accountsState.activeAccountId,
+  );
+  $: noAccountSelected = !activeAccount;
+  $: canAddMore = accountsState.entries.length < accountsState.limit;
+  $: isUpdating = updateStatus !== 'completed';
 
   function minotarHead(id?: string | null, size = 96): string {
-    const safeId = id && id.trim() ? id : 'Steve'
-    return `https://minotar.net/helm/${safeId}/${size}`
+    const safeId = id && id.trim() ? id : 'Steve';
+    return `https://minotar.net/helm/${safeId}/${size}`;
   }
 
   function accountAvatar(account: AccountProfile | null | undefined, size = 96): string {
-    if (!account) return minotarHead(undefined, size)
-    return minotarHead(account.uuid || account.username, size)
+    if (!account) return minotarHead(undefined, size);
+    return minotarHead(account.uuid || account.username, size);
   }
 
   function currentLanguage(conf: LauncherConfig | null): 'pt' | 'en' {
-    return conf?.language === 'pt' ? 'pt' : 'en'
+    return conf?.language === 'pt' ? 'pt' : 'en';
   }
 
   function makeVersionLabel(entry: VersionCatalogEntry): string {
-    return `SHINDO ${entry.minecraftVersion}`
+    return `SHINDO ${entry.minecraftVersion}`;
   }
 
   function cardBackground(entry: VersionCatalogEntry): string {
-    const gradient = 'linear-gradient(135deg, rgba(17, 24, 39, 0.55), rgba(2, 6, 23, 0.9))'
-    const img = entry.bannerUrl || bannerUrl
-    return `${gradient}, url(${img})`
+    const gradient = 'linear-gradient(135deg, rgba(17, 24, 39, 0.55), rgba(2, 6, 23, 0.9))';
+    const img = entry.bannerUrl || bannerUrl;
+    return `${gradient}, url(${img})`;
   }
 
-  $: avatarUrl = accountAvatar(activeAccount)
-  $: selectedVersionId = config?.versionId ?? clientState?.versionId ?? 'ShindoClient'
-  $: selectedVersionPresentation = resolveVersionPresentation(clientState)
-  $: versionCatalog = state.versionCatalog
-  $: allVersionCards = versionCatalog?.entries ?? []
-  $: enabledVersionCards = allVersionCards.filter((entry) => entry.enabled !== false)
-  $: versionCards = enabledVersionCards.length > 0 ? enabledVersionCards : allVersionCards
+  $: avatarUrl = accountAvatar(activeAccount);
+  $: selectedVersionId = config?.versionId ?? clientState?.versionId ?? 'ShindoClient';
+  $: selectedVersionPresentation = resolveVersionPresentation(clientState);
+  $: versionCatalog = state.versionCatalog;
+  $: allVersionCards = versionCatalog?.entries ?? [];
+  $: enabledVersionCards = allVersionCards.filter((entry) => entry.enabled !== false);
+  $: versionCards = enabledVersionCards.length > 0 ? enabledVersionCards : allVersionCards;
   $: selectedVersionMeta =
     versionCards.find((entry) => entry.id === selectedVersionId) ||
     versionCards.find((entry) => entry.id === versionCatalog?.defaultVersionId) ||
-    null
-  $: selectedBuildValue = config?.selectedBuild ?? null
-  $: buildOptions = selectedVersionMeta?.builds ?? []
+    null;
+  $: selectedBuildValue = config?.selectedBuild ?? null;
+  $: buildOptions = selectedVersionMeta?.builds ?? [];
   $: selectedBuildOption =
-    buildOptions.find((entry) => entry.build === selectedBuildValue) ||
-    buildOptions[0] ||
-    null
-  $: versionBannerBackground = selectedVersionMeta?.bannerUrl || bannerUrl
+    buildOptions.find((entry) => entry.build === selectedBuildValue) || buildOptions[0] || null;
+  $: versionBannerBackground = selectedVersionMeta?.bannerUrl || bannerUrl;
 
-  let accountMenuOpen = false
-  let versionPanelOpen = false
-  let accountDropdownRef: HTMLDivElement | null = null
-  let versionPanelRef: HTMLDivElement | null = null
-  let addPanelOpen = false
-  let addPanelMode: 'options' | 'offline' = 'options'
-  let offlineName = ''
-  let removeConfirmId: string | null = null
+  let accountMenuOpen = false;
+  let versionPanelOpen = false;
+  let accountDropdownRef: HTMLDivElement | null = null;
+  let versionPanelRef: HTMLDivElement | null = null;
+  let addPanelOpen = false;
+  let addPanelMode: 'options' | 'offline' = 'options';
+  let offlineName = '';
+  let removeConfirmId: string | null = null;
 
   onMount(() => {
     const handleClick = (event: MouseEvent) => {
-      const target = event.target as Node
+      const target = event.target as Node;
       if (accountDropdownRef && !accountDropdownRef.contains(target)) {
-        accountMenuOpen = false
+        accountMenuOpen = false;
       }
       if (versionPanelRef && !versionPanelRef.contains(target)) {
-        versionPanelOpen = false
+        versionPanelOpen = false;
       }
-    }
-    window.addEventListener('click', handleClick)
-    return () => window.removeEventListener('click', handleClick)
-  })
+    };
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  });
 
   function toggleAccountMenu(event: MouseEvent) {
-    event.stopPropagation()
-    accountMenuOpen = !accountMenuOpen
+    event.stopPropagation();
+    accountMenuOpen = !accountMenuOpen;
   }
 
   async function handleSelectAccount(accountId: string) {
-    accountMenuOpen = false
-    if (accountId === accountsState.activeAccountId) return
+    accountMenuOpen = false;
+    if (accountId === accountsState.activeAccountId) return;
     try {
-      await selectAccount(accountId)
+      await selectAccount(accountId);
     } catch {
       // handled by store
     }
   }
 
   async function handleRemoveAccount(accountId: string, event: MouseEvent) {
-    event.stopPropagation()
+    event.stopPropagation();
     if (removeConfirmId !== accountId) {
-      removeConfirmId = accountId
+      removeConfirmId = accountId;
       setTimeout(() => {
         if (removeConfirmId === accountId) {
-          removeConfirmId = null
+          removeConfirmId = null;
         }
-      }, 3500)
-      return
+      }, 3500);
+      return;
     }
 
-    removeConfirmId = null
+    removeConfirmId = null;
     try {
-      await removeAccount(accountId)
+      await removeAccount(accountId);
     } catch {
       // handled by store
     }
   }
 
   function openAddPanel() {
-    if (!canAddMore) return
-    accountMenuOpen = false
-    addPanelOpen = true
-    addPanelMode = 'options'
-    offlineName = ''
+    if (!canAddMore) return;
+    accountMenuOpen = false;
+    addPanelOpen = true;
+    addPanelMode = 'options';
+    offlineName = '';
   }
 
   function closeAddPanel() {
-    addPanelOpen = false
-    addPanelMode = 'options'
-    offlineName = ''
+    addPanelOpen = false;
+    addPanelMode = 'options';
+    offlineName = '';
   }
 
   async function handleMicrosoftLogin() {
-    if (!canAddMore) return
-    closeAddPanel()
+    if (!canAddMore) return;
+    closeAddPanel();
     try {
-      await addMicrosoftAccount()
+      await addMicrosoftAccount();
     } catch {
       // handled by store
     }
   }
 
   async function handleOfflineSubmit(event: SubmitEvent) {
-    event.preventDefault()
-    if (!offlineName.trim() || !canAddMore) return
+    event.preventDefault();
+    if (!offlineName.trim() || !canAddMore) return;
 
     try {
-      await addOfflineAccount(offlineName.trim())
-      closeAddPanel()
+      await addOfflineAccount(offlineName.trim());
+      closeAddPanel();
     } catch {
       // handled by store
     }
@@ -177,319 +177,94 @@
 
   function handlePanelOverlayKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      closeAddPanel()
+      event.preventDefault();
+      closeAddPanel();
     }
   }
 
   async function handleVersionSelect(versionId: string) {
     if (versionId === selectedVersionId) {
-      versionPanelOpen = false
-      return
+      versionPanelOpen = false;
+      return;
     }
-    versionPanelOpen = false
-    const target = versionCards.find((entry) => entry.id === versionId)
-    const nextBuild = target?.builds?.[0]?.build ?? null
-    await applyConfigPatch({ versionId, selectedBuild: nextBuild })
+    versionPanelOpen = false;
+    const target = versionCards.find((entry) => entry.id === versionId);
+    const nextBuild = target?.builds?.[0]?.build ?? null;
+    await applyConfigPatch({ versionId, selectedBuild: nextBuild });
   }
 
   async function handleBuildSelect(event: Event) {
-    const value = Number((event.target as HTMLSelectElement).value)
-    const nextBuild = Number.isFinite(value) && value > 0 ? value : null
-    await applyConfigPatch({ selectedBuild: nextBuild })
+    const value = Number((event.target as HTMLSelectElement).value);
+    const nextBuild = Number.isFinite(value) && value > 0 ? value : null;
+    await applyConfigPatch({ selectedBuild: nextBuild });
   }
 
   function normalizeStatusText(input: string): string {
-    const text = (input || '').trim()
-    if (!text) return ''
+    const text = (input || '').trim();
+    if (!text) return '';
     if (text.length > 30) {
-      return `${text.slice(0, 30).toUpperCase()}...`
+      return `${text.slice(0, 30).toUpperCase()}...`;
     }
-    return text.toUpperCase()
+    return text.toUpperCase();
   }
 
-  $: language = currentLanguage(config)
-  $: readyLabel = language === 'pt' ? 'INICIAR JOGO' : 'START GAME'
-  $: stopLabel = language === 'pt' ? 'PARAR' : 'CLOSE'
+  $: language = currentLanguage(config);
+  $: readyLabel = language === 'pt' ? 'INICIAR JOGO' : 'START GAME';
+  $: stopLabel = language === 'pt' ? 'PARAR' : 'CLOSE';
 
   $: updateLabel = (() => {
-    const msg = (update.message || '').toLowerCase()
+    const msg = (update.message || '').toLowerCase();
     if (language === 'pt') {
-      if (msg.includes('baixando') || msg.includes('download')) return 'BAIXANDO...'
-      if (msg.includes('sincronizando') || msg.includes('sync')) return 'SINCRONIZANDO...'
-      if (msg.includes('java') || msg.includes('runtime')) return 'PREPARANDO JAVA...'
-      if (msg.includes('launcher')) return 'ATUALIZANDO LAUNCHER...'
-      return 'ATUALIZANDO...'
+      if (msg.includes('baixando') || msg.includes('download')) return 'BAIXANDO...';
+      if (msg.includes('sincronizando') || msg.includes('sync')) return 'SINCRONIZANDO...';
+      if (msg.includes('java') || msg.includes('runtime')) return 'PREPARANDO JAVA...';
+      if (msg.includes('launcher')) return 'ATUALIZANDO LAUNCHER...';
+      return 'ATUALIZANDO...';
     }
-    if (msg.includes('baixando') || msg.includes('download')) return 'DOWNLOADING...'
-    if (msg.includes('sincronizando') || msg.includes('sync')) return 'SYNCING...'
-    if (msg.includes('java') || msg.includes('runtime')) return 'PREPARING JAVA...'
-    if (msg.includes('launcher')) return 'UPDATING LAUNCHER...'
-    return 'UPDATING...'
-  })()
+    if (msg.includes('baixando') || msg.includes('download')) return 'DOWNLOADING...';
+    if (msg.includes('sincronizando') || msg.includes('sync')) return 'SYNCING...';
+    if (msg.includes('java') || msg.includes('runtime')) return 'PREPARING JAVA...';
+    if (msg.includes('launcher')) return 'UPDATING LAUNCHER...';
+    return 'UPDATING...';
+  })();
 
   $: launchButtonLabel = (() => {
-    if (clientRunning) return stopLabel
-    if (launching) return language === 'pt' ? 'INICIANDO...' : 'LAUNCHING...'
-    if (isUpdating) return updateLabel
-    if (noAccountSelected) return language === 'pt' ? 'SELECIONE UMA CONTA' : 'SELECT AN ACCOUNT'
-    return readyLabel
-  })()
+    if (clientRunning) return stopLabel;
+    if (launching) return language === 'pt' ? 'INICIANDO...' : 'LAUNCHING...';
+    if (isUpdating) return updateLabel;
+    if (noAccountSelected) return language === 'pt' ? 'SELECIONE UMA CONTA' : 'SELECT AN ACCOUNT';
+    return readyLabel;
+  })();
 
   $: launchButtonClass = (() => {
-    if (clientRunning) return 'state-running'
-    if (isUpdating) return 'state-updating'
-    if (launching) return 'state-launching'
-    if (noAccountSelected) return 'state-disabled'
-    return 'state-ready'
-  })()
+    if (clientRunning) return 'state-running';
+    if (isUpdating) return 'state-updating';
+    if (launching) return 'state-launching';
+    if (noAccountSelected) return 'state-disabled';
+    return 'state-ready';
+  })();
 
-  $: launchButtonDisabled = (!clientRunning && (isUpdating || launching || noAccountSelected))
+  $: launchButtonDisabled = !clientRunning && (isUpdating || launching || noAccountSelected);
   $: launchHint = clientRunning
     ? normalizeStatusText(launcherStatus)
-    : normalizeStatusText(selectedBuildOption?.label || selectedVersionPresentation.optionLabel)
+    : normalizeStatusText(selectedBuildOption?.label || selectedVersionPresentation.optionLabel);
 
   async function handleLaunchPrimaryAction() {
     if (clientRunning) {
-      await stopClient()
-      return
+      await stopClient();
+      return;
     }
-    if (launchButtonDisabled) return
-    launch().catch(() => undefined)
+    if (launchButtonDisabled) return;
+    launch().catch(() => undefined);
   }
 </script>
-
-<div class="home-container">
-  <div class="account-section" bind:this={accountDropdownRef}>
-    <button
-      type="button"
-      class="account-toggle"
-      on:click={toggleAccountMenu}
-      aria-expanded={accountMenuOpen}
-      aria-label="Open account menu"
-    >
-      <img
-        class="account-avatar"
-        src={avatarUrl}
-        alt={activeAccount?.username || 'No account'}
-        draggable="false"
-      />
-      <div class="account-info">
-        <span class="account-name">{activeAccount?.username || 'No account selected'}</span>
-        <span class="account-type">
-          {activeAccount ? (activeAccount.type === 'microsoft' ? 'Microsoft' : 'Offline') : 'Choose or add an account'}
-        </span>
-      </div>
-      <ChevronDown class={`account-chevron ${accountMenuOpen ? 'open' : ''}`} />
-    </button>
-
-    {#if accountMenuOpen}
-      <div class="account-dropdown">
-        <div class="account-dropdown-header">
-          Accounts {accountsState.entries.length}/{accountsState.limit}
-        </div>
-
-        {#if accountsState.entries.length === 0}
-          <div class="account-empty">No saved accounts</div>
-        {:else}
-          {#each accountsState.entries as account}
-            <div class="account-row">
-              <button
-                type="button"
-                class={`account-option ${account.id === accountsState.activeAccountId ? 'active' : ''}`}
-                on:click={() => handleSelectAccount(account.id)}
-              >
-                <img
-                  class="account-option-avatar"
-                  src={accountAvatar(account, 48)}
-                  alt={account.username}
-                  draggable="false"
-                />
-                <span class="account-option-name">{account.username}</span>
-                {#if account.id === accountsState.activeAccountId}
-                  <span class="account-active-badge">Active</span>
-                {/if}
-              </button>
-              <button
-                type="button"
-                class={`account-remove ${removeConfirmId === account.id ? 'confirm' : ''}`}
-                on:click={(event) => handleRemoveAccount(account.id, event)}
-                title={removeConfirmId === account.id ? 'Confirm remove' : 'Remove account'}
-              >
-                {#if removeConfirmId === account.id}
-                  Confirm
-                {:else}
-                  <Trash2 class="account-remove-icon" />
-                {/if}
-              </button>
-            </div>
-          {/each}
-        {/if}
-
-        <button
-          type="button"
-          class="account-add-option"
-          on:click={openAddPanel}
-          disabled={!canAddMore}
-        >
-          <Plus class="account-add-icon" />
-          <span>{canAddMore ? 'Add account' : 'Account limit reached'}</span>
-        </button>
-      </div>
-    {/if}
-  </div>
-
-  <div class="hero-space" />
-
-  {#if accountsState.error}
-    <div class="status-chip status-chip-error">
-      <AlertTriangle class="status-chip-icon" />
-      <span>{accountsState.error}</span>
-    </div>
-  {/if}
-
-  <div class="launcher-bar-wrap" bind:this={versionPanelRef}>
-    {#if versionPanelOpen}
-      <div class="version-selector-panel">
-        {#if selectedVersionMeta && selectedVersionMeta.builds.length > 0}
-          <div class="version-build-toolbar">
-            <span class="version-build-label">Build</span>
-            <select class="version-build-select" value={selectedBuildOption?.build ?? ''} on:change={handleBuildSelect}>
-              {#each selectedVersionMeta.builds as build}
-                <option value={build.build}>
-                  {build.label} ({build.build})
-                </option>
-              {/each}
-            </select>
-          </div>
-        {/if}
-        <div class="version-grid">
-          {#each versionCards as version, index}
-            <button
-              type="button"
-              class={`version-card ${selectedVersionId === version.id ? 'selected' : ''}`}
-              style={`background-image: ${cardBackground(version)}; --card-idx:${index};`}
-              on:click={() => handleVersionSelect(version.id)}
-            >
-              <span class="version-card-label">{makeVersionLabel(version)}</span>
-              {#if version.latestBuild}
-                <span class="version-card-build">BUILD {version.latestBuild}</span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-      </div>
-    {/if}
-
-    <div class="version-banner" style={`background-image: linear-gradient(180deg, rgba(2, 6, 23, 0.12), rgba(2, 6, 23, 0.72)), url(${versionBannerBackground});`}>
-      <div class="version-banner-content">
-        <span class="version-banner-name">{selectedVersionMeta?.name || 'Shindo Client'}</span>
-        <span class="version-banner-meta">
-          MC {selectedVersionMeta?.minecraftVersion || selectedVersionPresentation.baseVersion}
-          {#if selectedBuildOption}
-            {' · '}BUILD {selectedBuildOption.build}
-          {/if}
-        </span>
-      </div>
-    </div>
-
-    <div class="launcher-bar">
-      <button
-        type="button"
-        class={`launch-button ${launchButtonClass}`}
-        on:click={handleLaunchPrimaryAction}
-        disabled={launchButtonDisabled}
-      >
-        <span class="launch-main-text">{launchButtonLabel}</span>
-        <span class="launch-sub-text">{launchHint}</span>
-      </button>
-
-      <button
-        type="button"
-        class="version-toggle"
-        on:click|stopPropagation={() => (versionPanelOpen = !versionPanelOpen)}
-        aria-label="Open version selector"
-        title="Version selector"
-      >
-        <ChevronUp class="version-toggle-icon" />
-      </button>
-    </div>
-  </div>
-
-  {#if addPanelOpen}
-    <div
-      class="panel-overlay"
-      on:click|self={closeAddPanel}
-      on:keydown={handlePanelOverlayKeydown}
-      role="button"
-      tabindex="0"
-      aria-label="Close add account panel"
-    >
-      <div class="panel-card">
-        <button type="button" class="panel-close" on:click={closeAddPanel} aria-label="Close add account panel">
-          <X class="panel-close-icon" />
-        </button>
-
-        {#if addPanelMode === 'options'}
-          <h3 class="panel-title">Add account</h3>
-          <p class="panel-subtitle">Choose the login type</p>
-          <div class="panel-actions">
-            <button
-              type="button"
-              class="panel-action microsoft"
-              on:click={handleMicrosoftLogin}
-              disabled={accountsState.loginInProgress}
-            >
-              {#if accountsState.loginInProgress}
-                <Loader2 class="panel-action-icon spinning" />
-                <span>Opening Microsoft login...</span>
-              {:else}
-                <Shield class="panel-action-icon" />
-                <span>Login with Microsoft</span>
-              {/if}
-            </button>
-
-            <button type="button" class="panel-action offline" on:click={() => (addPanelMode = 'offline')}>
-              <User class="panel-action-icon" />
-              <span>Login offline</span>
-            </button>
-          </div>
-        {:else}
-          <h3 class="panel-title">Offline account</h3>
-          <p class="panel-subtitle">Type the username (max 16 chars)</p>
-          <form class="offline-form" on:submit={handleOfflineSubmit}>
-            <input
-              type="text"
-              bind:value={offlineName}
-              maxlength="16"
-              class="offline-input"
-              placeholder="Username"
-              disabled={accountsState.loading}
-            />
-            <div class="offline-form-actions">
-              <button type="button" class="secondary-btn" on:click={() => (addPanelMode = 'options')}>
-                Back
-              </button>
-              <button
-                type="submit"
-                class="primary-btn"
-                disabled={!offlineName.trim() || accountsState.loading}
-              >
-                {accountsState.loading ? 'Adding...' : 'Add offline account'}
-              </button>
-            </div>
-          </form>
-        {/if}
-      </div>
-    </div>
-  {/if}
-</div>
 
 <style>
   .home-container {
     width: 100%;
     height: 100%;
-    background: radial-gradient(circle at 20% 10%, rgba(59, 130, 246, 0.08), transparent 42%), #05070f;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(59, 130, 246, 0.08), transparent 42%), #05070f;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -790,7 +565,10 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
-    transition: transform 0.18s ease, filter 0.18s ease, opacity 0.2s ease;
+    transition:
+      transform 0.18s ease,
+      filter 0.18s ease,
+      opacity 0.2s ease;
   }
 
   .launch-button:hover:not(:disabled) {
@@ -1152,7 +930,261 @@
   }
 
   @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>
+
+<div class="home-container">
+  <div class="account-section" bind:this={accountDropdownRef}>
+    <button
+      type="button"
+      class="account-toggle"
+      on:click={toggleAccountMenu}
+      aria-expanded={accountMenuOpen}
+      aria-label="Open account menu"
+    >
+      <img
+        class="account-avatar"
+        src={avatarUrl}
+        alt={activeAccount?.username || 'No account'}
+        draggable="false"
+      />
+      <div class="account-info">
+        <span class="account-name">{activeAccount?.username || 'No account selected'}</span>
+        <span class="account-type">
+          {activeAccount
+            ? activeAccount.type === 'microsoft'
+              ? 'Microsoft'
+              : 'Offline'
+            : 'Choose or add an account'}
+        </span>
+      </div>
+      <ChevronDown class={`account-chevron ${accountMenuOpen ? 'open' : ''}`} />
+    </button>
+
+    {#if accountMenuOpen}
+      <div class="account-dropdown">
+        <div class="account-dropdown-header">
+          Accounts {accountsState.entries.length}/{accountsState.limit}
+        </div>
+
+        {#if accountsState.entries.length === 0}
+          <div class="account-empty">No saved accounts</div>
+        {:else}
+          {#each accountsState.entries as account}
+            <div class="account-row">
+              <button
+                type="button"
+                class={`account-option ${account.id === accountsState.activeAccountId ? 'active' : ''}`}
+                on:click={() => handleSelectAccount(account.id)}
+              >
+                <img
+                  class="account-option-avatar"
+                  src={accountAvatar(account, 48)}
+                  alt={account.username}
+                  draggable="false"
+                />
+                <span class="account-option-name">{account.username}</span>
+                {#if account.id === accountsState.activeAccountId}
+                  <span class="account-active-badge">Active</span>
+                {/if}
+              </button>
+              <button
+                type="button"
+                class={`account-remove ${removeConfirmId === account.id ? 'confirm' : ''}`}
+                on:click={(event) => handleRemoveAccount(account.id, event)}
+                title={removeConfirmId === account.id ? 'Confirm remove' : 'Remove account'}
+              >
+                {#if removeConfirmId === account.id}
+                  Confirm
+                {:else}
+                  <Trash2 class="account-remove-icon" />
+                {/if}
+              </button>
+            </div>
+          {/each}
+        {/if}
+
+        <button
+          type="button"
+          class="account-add-option"
+          on:click={openAddPanel}
+          disabled={!canAddMore}
+        >
+          <Plus class="account-add-icon" />
+          <span>{canAddMore ? 'Add account' : 'Account limit reached'}</span>
+        </button>
+      </div>
+    {/if}
+  </div>
+
+  <div class="hero-space" />
+
+  {#if accountsState.error}
+    <div class="status-chip status-chip-error">
+      <AlertTriangle class="status-chip-icon" />
+      <span>{accountsState.error}</span>
+    </div>
+  {/if}
+
+  <div class="launcher-bar-wrap" bind:this={versionPanelRef}>
+    {#if versionPanelOpen}
+      <div class="version-selector-panel">
+        {#if selectedVersionMeta && selectedVersionMeta.builds.length > 0}
+          <div class="version-build-toolbar">
+            <span class="version-build-label">Build</span>
+            <select
+              class="version-build-select"
+              value={selectedBuildOption?.build ?? ''}
+              on:change={handleBuildSelect}
+            >
+              {#each selectedVersionMeta.builds as build}
+                <option value={build.build}>
+                  {build.label} ({build.build})
+                </option>
+              {/each}
+            </select>
+          </div>
+        {/if}
+        <div class="version-grid">
+          {#each versionCards as version, index}
+            <button
+              type="button"
+              class={`version-card ${selectedVersionId === version.id ? 'selected' : ''}`}
+              style={`background-image: ${cardBackground(version)}; --card-idx:${index};`}
+              on:click={() => handleVersionSelect(version.id)}
+            >
+              <span class="version-card-label">{makeVersionLabel(version)}</span>
+              {#if version.latestBuild}
+                <span class="version-card-build">BUILD {version.latestBuild}</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    <div
+      class="version-banner"
+      style={`background-image: linear-gradient(180deg, rgba(2, 6, 23, 0.12), rgba(2, 6, 23, 0.72)), url(${versionBannerBackground});`}
+    >
+      <div class="version-banner-content">
+        <span class="version-banner-name">{selectedVersionMeta?.name || 'Shindo Client'}</span>
+        <span class="version-banner-meta">
+          MC {selectedVersionMeta?.minecraftVersion || selectedVersionPresentation.baseVersion}
+          {#if selectedBuildOption}
+            {' · '}BUILD {selectedBuildOption.build}
+          {/if}
+        </span>
+      </div>
+    </div>
+
+    <div class="launcher-bar">
+      <button
+        type="button"
+        class={`launch-button ${launchButtonClass}`}
+        on:click={handleLaunchPrimaryAction}
+        disabled={launchButtonDisabled}
+      >
+        <span class="launch-main-text">{launchButtonLabel}</span>
+        <span class="launch-sub-text">{launchHint}</span>
+      </button>
+
+      <button
+        type="button"
+        class="version-toggle"
+        on:click|stopPropagation={() => (versionPanelOpen = !versionPanelOpen)}
+        aria-label="Open version selector"
+        title="Version selector"
+      >
+        <ChevronUp class="version-toggle-icon" />
+      </button>
+    </div>
+  </div>
+
+  {#if addPanelOpen}
+    <div
+      class="panel-overlay"
+      on:click|self={closeAddPanel}
+      on:keydown={handlePanelOverlayKeydown}
+      role="button"
+      tabindex="0"
+      aria-label="Close add account panel"
+    >
+      <div class="panel-card">
+        <button
+          type="button"
+          class="panel-close"
+          on:click={closeAddPanel}
+          aria-label="Close add account panel"
+        >
+          <X class="panel-close-icon" />
+        </button>
+
+        {#if addPanelMode === 'options'}
+          <h3 class="panel-title">Add account</h3>
+          <p class="panel-subtitle">Choose the login type</p>
+          <div class="panel-actions">
+            <button
+              type="button"
+              class="panel-action microsoft"
+              on:click={handleMicrosoftLogin}
+              disabled={accountsState.loginInProgress}
+            >
+              {#if accountsState.loginInProgress}
+                <Loader2 class="panel-action-icon spinning" />
+                <span>Opening Microsoft login...</span>
+              {:else}
+                <Shield class="panel-action-icon" />
+                <span>Login with Microsoft</span>
+              {/if}
+            </button>
+
+            <button
+              type="button"
+              class="panel-action offline"
+              on:click={() => (addPanelMode = 'offline')}
+            >
+              <User class="panel-action-icon" />
+              <span>Login offline</span>
+            </button>
+          </div>
+        {:else}
+          <h3 class="panel-title">Offline account</h3>
+          <p class="panel-subtitle">Type the username (max 16 chars)</p>
+          <form class="offline-form" on:submit={handleOfflineSubmit}>
+            <input
+              type="text"
+              bind:value={offlineName}
+              maxlength="16"
+              class="offline-input"
+              placeholder="Username"
+              disabled={accountsState.loading}
+            />
+            <div class="offline-form-actions">
+              <button
+                type="button"
+                class="secondary-btn"
+                on:click={() => (addPanelMode = 'options')}
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                class="primary-btn"
+                disabled={!offlineName.trim() || accountsState.loading}
+              >
+                {accountsState.loading ? 'Adding...' : 'Add offline account'}
+              </button>
+            </div>
+          </form>
+        {/if}
+      </div>
+    </div>
+  {/if}
+</div>

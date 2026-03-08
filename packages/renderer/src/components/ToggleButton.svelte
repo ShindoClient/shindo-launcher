@@ -1,33 +1,19 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte'
+  import { createEventDispatcher } from 'svelte';
 
-  export let checked = false
-  export let disabled = false
-  export let label: string | undefined
+  export let checked = false;
+  export let disabled = false;
+  export let label: string | undefined;
 
-  const dispatch = createEventDispatcher<{ change: boolean }>()
+  const dispatch = createEventDispatcher<{ change: boolean }>();
 
   function toggle() {
-    if (disabled) return
-    const next = !checked
-    checked = next
-    dispatch('change', next)
+    if (disabled) return;
+    const next = !checked;
+    checked = next;
+    dispatch('change', next);
   }
 </script>
-
-<button
-  type="button"
-  class={`toggle ${checked ? 'toggle--on' : 'toggle--off'} ${disabled ? 'toggle--disabled' : ''}`}
-  role="switch"
-  aria-checked={checked}
-  aria-label={label}
-  on:click={toggle}
->
-  <span class="toggle__thumb" />
-  <span class="toggle__track">
-    <slot />
-  </span>
-</button>
 
 <style>
   .toggle {
@@ -40,7 +26,9 @@
     border-radius: 999px;
     border: 1px solid rgba(30, 64, 175, 0.55);
     background: rgba(15, 23, 42, 0.7);
-    transition: background 150ms ease, border-color 150ms ease;
+    transition:
+      background 150ms ease,
+      border-color 150ms ease;
   }
 
   .toggle--on {
@@ -91,3 +79,17 @@
     outline-offset: 2px;
   }
 </style>
+
+<button
+  type="button"
+  class={`toggle ${checked ? 'toggle--on' : 'toggle--off'} ${disabled ? 'toggle--disabled' : ''}`}
+  role="switch"
+  aria-checked={checked}
+  aria-label={label}
+  on:click={toggle}
+>
+  <span class="toggle__thumb" />
+  <span class="toggle__track">
+    <slot />
+  </span>
+</button>

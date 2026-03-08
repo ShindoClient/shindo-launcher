@@ -1,131 +1,111 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy, onMount } from 'svelte';
 
-  export let className = ''
+  export let className = '';
 
-  let viewport: HTMLDivElement
-  let handleHeight = 0
-  let handleOffset = 0
-  let dragging = false
-  let dragStartY = 0
-  let dragStartScrollTop = 0
+  let viewport: HTMLDivElement;
+  let handleHeight = 0;
+  let handleOffset = 0;
+  let dragging = false;
+  let dragStartY = 0;
+  let dragStartScrollTop = 0;
 
   function updateScrollbar() {
-    if (!viewport) return
-    const { scrollHeight, clientHeight, scrollTop } = viewport
+    if (!viewport) return;
+    const { scrollHeight, clientHeight, scrollTop } = viewport;
     if (scrollHeight <= 0 || clientHeight <= 0) {
-      handleHeight = 0
-      handleOffset = 0
-      return
+      handleHeight = 0;
+      handleOffset = 0;
+      return;
     }
-    const maxScrollTop = scrollHeight - clientHeight
-    const availableTrack = clientHeight - getHandleSize(clientHeight, scrollHeight)
-    handleHeight = getHandleSize(clientHeight, scrollHeight)
-    handleOffset = maxScrollTop > 0 ? (scrollTop / maxScrollTop) * availableTrack : 0
+    const maxScrollTop = scrollHeight - clientHeight;
+    const availableTrack = clientHeight - getHandleSize(clientHeight, scrollHeight);
+    handleHeight = getHandleSize(clientHeight, scrollHeight);
+    handleOffset = maxScrollTop > 0 ? (scrollTop / maxScrollTop) * availableTrack : 0;
   }
 
   function getHandleSize(clientHeight: number, scrollHeight: number): number {
-    const ratio = clientHeight / scrollHeight
-    const size = clientHeight * ratio
-    return Math.max(32, Math.min(clientHeight, size))
+    const ratio = clientHeight / scrollHeight;
+    const size = clientHeight * ratio;
+    return Math.max(32, Math.min(clientHeight, size));
   }
 
   function onScroll() {
-    updateScrollbar()
+    updateScrollbar();
   }
 
   function onWheel(event: WheelEvent) {
-    if (!viewport) return
-    event.preventDefault()
-    viewport.scrollTop += event.deltaY
+    if (!viewport) return;
+    event.preventDefault();
+    viewport.scrollTop += event.deltaY;
   }
 
   function onTrackPointerDown(event: PointerEvent) {
-    if (!viewport) return
-    const track = event.currentTarget as HTMLElement
-    const rect = track.getBoundingClientRect()
-    const offset = event.clientY - rect.top
-    const targetTop = offset - handleHeight / 2
-    scrollToHandlePosition(targetTop)
+    if (!viewport) return;
+    const track = event.currentTarget as HTMLElement;
+    const rect = track.getBoundingClientRect();
+    const offset = event.clientY - rect.top;
+    const targetTop = offset - handleHeight / 2;
+    scrollToHandlePosition(targetTop);
   }
 
   function onHandlePointerDown(event: PointerEvent) {
-    if (!viewport) return
-    dragging = true
-    dragStartY = event.clientY
-    dragStartScrollTop = viewport.scrollTop
-    viewport.classList.add('scroll-area--dragging')
-    window.addEventListener('pointermove', onHandlePointerMove, { passive: false })
-    window.addEventListener('pointerup', onHandlePointerUp, { once: true })
+    if (!viewport) return;
+    dragging = true;
+    dragStartY = event.clientY;
+    dragStartScrollTop = viewport.scrollTop;
+    viewport.classList.add('scroll-area--dragging');
+    window.addEventListener('pointermove', onHandlePointerMove, { passive: false });
+    window.addEventListener('pointerup', onHandlePointerUp, { once: true });
   }
 
   function onHandlePointerMove(event: PointerEvent) {
-    if (!dragging || !viewport) return
-    event.preventDefault()
-    const { scrollHeight, clientHeight } = viewport
-    const maxScrollTop = scrollHeight - clientHeight
-    if (maxScrollTop <= 0) return
+    if (!dragging || !viewport) return;
+    event.preventDefault();
+    const { scrollHeight, clientHeight } = viewport;
+    const maxScrollTop = scrollHeight - clientHeight;
+    if (maxScrollTop <= 0) return;
 
-    const deltaPixels = event.clientY - dragStartY
-    const handleTravel = clientHeight - handleHeight
-    if (handleTravel <= 0) return
+    const deltaPixels = event.clientY - dragStartY;
+    const handleTravel = clientHeight - handleHeight;
+    if (handleTravel <= 0) return;
 
-    const scrollDelta = (deltaPixels / handleTravel) * maxScrollTop
-    viewport.scrollTop = dragStartScrollTop + scrollDelta
+    const scrollDelta = (deltaPixels / handleTravel) * maxScrollTop;
+    viewport.scrollTop = dragStartScrollTop + scrollDelta;
   }
 
   function onHandlePointerUp() {
-    dragging = false
-    viewport?.classList.remove('scroll-area--dragging')
-    window.removeEventListener('pointermove', onHandlePointerMove)
+    dragging = false;
+    viewport?.classList.remove('scroll-area--dragging');
+    window.removeEventListener('pointermove', onHandlePointerMove);
   }
 
   function scrollToHandlePosition(handlePosition: number) {
-    if (!viewport) return
-    const { scrollHeight, clientHeight } = viewport
-    const maxScrollTop = scrollHeight - clientHeight
-    const handleTravel = clientHeight - handleHeight
-    if (handleTravel <= 0 || maxScrollTop <= 0) return
-    const ratio = handlePosition / handleTravel
-    viewport.scrollTop = ratio * maxScrollTop
+    if (!viewport) return;
+    const { scrollHeight, clientHeight } = viewport;
+    const maxScrollTop = scrollHeight - clientHeight;
+    const handleTravel = clientHeight - handleHeight;
+    if (handleTravel <= 0 || maxScrollTop <= 0) return;
+    const ratio = handlePosition / handleTravel;
+    viewport.scrollTop = ratio * maxScrollTop;
   }
 
-  let resizeObserver: ResizeObserver | null = null
+  let resizeObserver: ResizeObserver | null = null;
 
   onMount(() => {
     if (viewport) {
-      updateScrollbar()
-      resizeObserver = new ResizeObserver(() => updateScrollbar())
-      resizeObserver.observe(viewport)
+      updateScrollbar();
+      resizeObserver = new ResizeObserver(() => updateScrollbar());
+      resizeObserver.observe(viewport);
     }
-  })
+  });
 
   onDestroy(() => {
-    resizeObserver?.disconnect()
-    window.removeEventListener('pointermove', onHandlePointerMove)
-    window.removeEventListener('pointerup', onHandlePointerUp)
-  })
+    resizeObserver?.disconnect();
+    window.removeEventListener('pointermove', onHandlePointerMove);
+    window.removeEventListener('pointerup', onHandlePointerUp);
+  });
 </script>
-
-<div class={`scroll-area ${className}`}>
-  <div
-    class="scroll-area__viewport"
-    bind:this={viewport}
-    on:scroll={onScroll}
-    on:wheel={onWheel}
-  >
-    <div class="scroll-area__content">
-      <slot />
-    </div>
-  </div>
-  <div class="scroll-area__track" on:pointerdown={onTrackPointerDown} aria-hidden="true">
-    <div
-      class="scroll-area__handle"
-      style={`height: ${handleHeight}px; transform: translateY(${handleOffset}px);`}
-      on:pointerdown|stopPropagation={onHandlePointerDown}
-    />
-  </div>
-</div>
 
 <style>
   .scroll-area {
@@ -185,3 +165,18 @@
     cursor: grabbing;
   }
 </style>
+
+<div class={`scroll-area ${className}`}>
+  <div class="scroll-area__viewport" bind:this={viewport} on:scroll={onScroll} on:wheel={onWheel}>
+    <div class="scroll-area__content">
+      <slot />
+    </div>
+  </div>
+  <div class="scroll-area__track" on:pointerdown={onTrackPointerDown} aria-hidden="true">
+    <div
+      class="scroll-area__handle"
+      style={`height: ${handleHeight}px; transform: translateY(${handleOffset}px);`}
+      on:pointerdown|stopPropagation={onHandlePointerDown}
+    />
+  </div>
+</div>

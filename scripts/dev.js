@@ -66,7 +66,7 @@ async function findAvailablePort(host, startPort) {
       prefix: '[{name}]',
       killOthers: ['failure', 'success'],
       env,
-    }
+    },
   );
 
   await result;

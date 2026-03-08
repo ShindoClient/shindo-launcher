@@ -10,6 +10,9 @@
     ],
     "email": "miki@mittelsdorf.me"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "type": "commonjs",
   "main": "dist/main/main.js",
   "scripts": {
@@ -19,15 +22,16 @@
     "watch:main": "tsc -p packages/main/tsconfig.json --watch",
     "watch:preload": "tsc -p packages/preload/tsconfig.json --watch",
     "watch:shared": "tsc -p packages/shared/tsconfig.json --watch",
-    "build": "pnpm clean && pnpm build:shared && pnpm build:preload && pnpm build:main && pnpm build:renderer",
+    "build": "bun clean && bun build:shared && bun build:preload && bun build:main && bun build:renderer",
     "build:shared": "tsc -p packages/shared/tsconfig.json",
     "build:preload": "tsc -p packages/preload/tsconfig.json",
     "build:main": "tsc -p packages/main/tsconfig.json",
     "build:renderer": "cd packages/renderer && vite build",
     "preview": "cd packages/renderer && vite preview",
     "clean": "rimraf dist",
-    "package": "pnpm build && electron-builder",
-    "lint": "echo \"TODO: add linting\""
+    "package": "bun build && electron-builder",
+    "lint": "echo \"TODO: add linting\"",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@shindo/shared": "workspace:*",
@@ -58,6 +62,7 @@
     "electron-builder": "^24.9.1",
     "electron-connect": "^0.6.3",
     "postcss": "^8.4.32",
+    "prettier-plugin-tailwindcss": "^0.7.2",
     "rimraf": "^5.0.5",
     "svelte": "^4.2.18",
     "svelte-check": "^3.8.5",

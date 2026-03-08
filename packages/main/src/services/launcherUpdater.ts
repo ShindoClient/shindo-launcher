@@ -17,7 +17,13 @@ import type {
   ReleaseAssetInfo,
   ReleaseInfo,
 } from '@shindo/shared';
-import { downloadAsset, fetchLatestRelease, GitHubAsset, GitHubRelease, GitHubHttpError } from './githubClient';
+import {
+  downloadAsset,
+  fetchLatestRelease,
+  GitHubAsset,
+  GitHubRelease,
+  GitHubHttpError,
+} from './githubClient';
 import { getLauncherUpdateDir } from '../utils/pathResolver';
 import { distributionConfig } from '../config/distributionConfig';
 
@@ -342,7 +348,9 @@ async function checkWithAutoUpdater(): Promise<LauncherUpdateInfoPayload | null>
     const latestVersion = normalizeVersion(updateInfo.version);
     const currentVersion = getCurrentVersion();
     const updateAvailable =
-      latestVersion && currentVersion ? semver.gt(latestVersion, currentVersion) : result.isUpdateAvailable;
+      latestVersion && currentVersion
+        ? semver.gt(latestVersion, currentVersion)
+        : result.isUpdateAvailable;
 
     const release = mapReleaseFromUpdateInfo(updateInfo);
     const asset = mapAssetFromFile(pickFileForPlatform(updateInfo.files));
@@ -387,7 +395,9 @@ async function checkWithGitHubFallback(): Promise<LauncherUpdateInfoPayload> {
   const currentVersion = current;
 
   const updateAvailable =
-    latest && currentVersion ? semver.gt(latest, currentVersion) : latestRaw !== undefined && latestRaw !== currentVersion;
+    latest && currentVersion
+      ? semver.gt(latest, currentVersion)
+      : latestRaw !== undefined && latestRaw !== currentVersion;
 
   return {
     updateAvailable: Boolean(updateAvailable),

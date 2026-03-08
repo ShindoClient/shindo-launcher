@@ -262,20 +262,26 @@ async function requestXstsToken(userToken: string): Promise<XboxAuthResponse> {
 }
 
 async function loginWithXbox(identityToken: string): Promise<MinecraftAuthResponse> {
-  return fetchJson<MinecraftAuthResponse>('https://api.minecraftservices.com/authentication/login_with_xbox', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identityToken }),
-  });
+  return fetchJson<MinecraftAuthResponse>(
+    'https://api.minecraftservices.com/authentication/login_with_xbox',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identityToken }),
+    },
+  );
 }
 
 async function fetchMinecraftProfile(accessToken: string): Promise<MinecraftProfileResponse> {
-  return fetchJson<MinecraftProfileResponse>('https://api.minecraftservices.com/minecraft/profile', {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
+  return fetchJson<MinecraftProfileResponse>(
+    'https://api.minecraftservices.com/minecraft/profile',
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  });
+  );
 }
 
 async function performMicrosoftOAuth(parent?: BrowserWindow): Promise<MicrosoftTokenResponse> {
@@ -486,7 +492,8 @@ export class AccountService {
       uuid: profile.id,
       createdAt: nowTs,
       lastUsedAt: nowTs,
-      skinUrl: profile.skins?.find((skin) => skin.state === 'ACTIVE')?.url ?? resolveSkinUrl(profile.id),
+      skinUrl:
+        profile.skins?.find((skin) => skin.state === 'ACTIVE')?.url ?? resolveSkinUrl(profile.id),
       refreshToken,
       accessToken,
       accessTokenExpiresAt,
@@ -551,7 +558,8 @@ export class AccountService {
     account.username = profile.name;
     account.uuid = profile.id;
     account.lastUsedAt = now();
-    account.skinUrl = profile.skins?.find((skin) => skin.state === 'ACTIVE')?.url ?? account.skinUrl;
+    account.skinUrl =
+      profile.skins?.find((skin) => skin.state === 'ACTIVE')?.url ?? account.skinUrl;
 
     this.persist();
 
@@ -589,4 +597,3 @@ export class AccountService {
 }
 
 export const accountService = new AccountService();
-

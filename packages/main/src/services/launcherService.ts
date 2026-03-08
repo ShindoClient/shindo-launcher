@@ -14,7 +14,12 @@ import type {
   LauncherUpdateResultPayload,
   MemoryOptions,
 } from '@shindo/shared';
-import { ensureClientUpToDate, getLocalClientState, getVersionCatalog, type EnsureClientOptions } from './clientManager';
+import {
+  ensureClientUpToDate,
+  getLocalClientState,
+  getVersionCatalog,
+  type EnsureClientOptions,
+} from './clientManager';
 import { checkLauncherUpdate, ensureLauncherUpdate, applyLauncherUpdate } from './launcherUpdater';
 import { getBaseDataDir, getVersionsDir } from '../utils/pathResolver';
 import { loadConfig, updateConfig } from './configService';
@@ -29,7 +34,8 @@ export interface LaunchCallbacks {
   onClose?: (code: number | null) => void;
 }
 
-const LAUNCHWRAPPER_URL = 'https://libraries.minecraft.net/net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar';
+const LAUNCHWRAPPER_URL =
+  'https://libraries.minecraft.net/net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar';
 const REQUIRED_LIBRARIES = [
   {
     relativePath: 'org/ow2/asm/asm-all/5.0.3/asm-all-5.0.3.jar',
@@ -38,7 +44,15 @@ const REQUIRED_LIBRARIES = [
 ];
 
 async function ensureLaunchWrapperJar(root: string): Promise<void> {
-  const jarPath = path.join(root, 'libraries', 'net', 'minecraft', 'launchwrapper', '1.12', 'launchwrapper-1.12.jar');
+  const jarPath = path.join(
+    root,
+    'libraries',
+    'net',
+    'minecraft',
+    'launchwrapper',
+    '1.12',
+    'launchwrapper-1.12.jar',
+  );
   try {
     const stats = fs.statSync(jarPath);
     if (stats.size > 0) {
@@ -210,11 +224,13 @@ export class LauncherService {
     if (jreResult.patch) {
       config = updateConfig(jreResult.patch);
     }
-    
+
     const selectedBuild =
       typeof options?.build === 'number' && Number.isFinite(options.build)
         ? options.build
-        : (typeof config.selectedBuild === 'number' && Number.isFinite(config.selectedBuild) ? config.selectedBuild : undefined);
+        : typeof config.selectedBuild === 'number' && Number.isFinite(config.selectedBuild)
+          ? config.selectedBuild
+          : undefined;
 
     console.log('[LAUNCHER] Ensuring selected client build:', {
       versionId: options?.versionId || config.versionId,
@@ -250,7 +266,7 @@ export class LauncherService {
       versionId,
       versionNumber,
       assetIndex,
-      versionJsonRelative
+      versionJsonRelative,
     });
 
     const configJvmArgs = parseJvmArgs(config.jvmArgs);
@@ -258,7 +274,7 @@ export class LauncherService {
 
     const accountContext = await accountService.getLaunchContext();
     console.log('[LAUNCHER] Account context:', accountContext);
-    
+
     const authorization = await buildAuthorization(accountContext);
     console.log('[LAUNCHER] Authorization built');
 

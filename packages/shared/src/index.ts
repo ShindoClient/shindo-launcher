@@ -138,7 +138,11 @@ export interface LaunchClientResultPayload {
 }
 
 export interface LauncherBridge {
-  ensureClientUpToDate(options?: { force?: boolean; versionId?: string; build?: number | null }): Promise<ClientUpdatePayload>;
+  ensureClientUpToDate(options?: {
+    force?: boolean;
+    versionId?: string;
+    build?: number | null;
+  }): Promise<ClientUpdatePayload>;
   getClientState(): Promise<ClientStatePayload>;
   checkLauncherUpdate(): Promise<LauncherUpdateInfoPayload>;
   downloadLauncherUpdate(): Promise<LauncherUpdateResultPayload>;
@@ -185,10 +189,7 @@ export interface SystemMemoryInfo {
   totalGB: number;
 }
 
-export type UpdateStep =
-  | 'launcher-update'
-  | 'jre-setup'
-  | 'client-update';
+export type UpdateStep = 'launcher-update' | 'jre-setup' | 'client-update';
 
 export interface UpdateProgressPayload {
   step: UpdateStep;

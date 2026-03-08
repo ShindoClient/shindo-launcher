@@ -1,37 +1,37 @@
-import type { ClientStatePayload } from '@shindo/shared'
-import logoBanner from '../assets/logo.png'
-import type { Language } from '../i18n'
-import { getLanguage } from '../i18n'
+import type { ClientStatePayload } from '@shindo/shared';
+import logoBanner from '../assets/logo.png';
+import type { Language } from '../i18n';
+import { getLanguage } from '../i18n';
 
 export interface VersionVisualConfig {
-  image?: string
-  gradient?: string
-  accent?: string
+  image?: string;
+  gradient?: string;
+  accent?: string;
 }
 
 export interface VersionPresentationConfig {
-  id: string
-  name: string
-  headline: string
-  description?: string
-  visual: VersionVisualConfig
+  id: string;
+  name: string;
+  headline: string;
+  description?: string;
+  visual: VersionVisualConfig;
   overrides?: {
-    baseVersion?: string
-    build?: string
-    optionLabel?: string
-  }
+    baseVersion?: string;
+    build?: string;
+    optionLabel?: string;
+  };
 }
 
 export interface ResolvedVersionPresentation {
-  id: string
-  name: string
-  headline: string
-  description?: string
-  baseVersion: string
-  buildLabel: string
-  accent: string
-  backgroundImage: string
-  optionLabel: string
+  id: string;
+  name: string;
+  headline: string;
+  description?: string;
+  baseVersion: string;
+  buildLabel: string;
+  accent: string;
+  backgroundImage: string;
+  optionLabel: string;
 }
 
 const FALLBACK_PRESENTATION: VersionPresentationConfig = {
@@ -43,14 +43,15 @@ const FALLBACK_PRESENTATION: VersionPresentationConfig = {
     gradient: 'linear-gradient(135deg, rgba(129, 140, 248, 0.35), rgba(30, 41, 59, 0.85))',
     accent: '#6366f1',
   },
-}
+};
 
 export const VERSION_PRESENTATIONS: Record<string, VersionPresentationConfig> = {
   ShindoClient: {
     id: 'ShindoClient',
     name: 'Shindo Client',
     headline: 'Compatibilidade maxima com os servidores competitivos.',
-    description: 'Build oficial com recursos personalizados, bibliotecas atualizadas e otimizacoes.',
+    description:
+      'Build oficial com recursos personalizados, bibliotecas atualizadas e otimizacoes.',
     visual: {
       image: logoBanner,
       gradient: 'linear-gradient(135deg, rgba(76, 29, 149, 0.65), rgba(15, 23, 42, 0.85))',
@@ -64,7 +65,8 @@ export const VERSION_PRESENTATIONS: Record<string, VersionPresentationConfig> = 
     id: 'ShindoClient-1.7.10',
     name: 'Shindo Client',
     headline: 'Compatibilidade legado com performance otimizata.',
-    description: 'Build ajustada para servidores baseados na 1.7.10, mantendo os recursos classicos.',
+    description:
+      'Build ajustada para servidores baseados na 1.7.10, mantendo os recursos classicos.',
     visual: {
       gradient: 'linear-gradient(135deg, rgba(250, 204, 21, 0.55), rgba(202, 138, 4, 0.85))',
       accent: '#facc15',
@@ -116,14 +118,17 @@ export const VERSION_PRESENTATIONS: Record<string, VersionPresentationConfig> = 
       optionLabel: 'Shindo Client 1.16.5',
     },
   },
-}
+};
 
-const VERSION_COPY: Record<string, Partial<Record<Language, Partial<VersionPresentationConfig>>>> = {
+const VERSION_COPY: Record<
+  string,
+  Partial<Record<Language, Partial<VersionPresentationConfig>>>
+> = {
   default: {
     en: {
       name: 'Minecraft',
       headline: 'Ready-to-play default experience',
-      description: 'Launch with the launcher\'s optimized settings.',
+      description: "Launch with the launcher's optimized settings.",
     },
   },
   ShindoClient: {
@@ -162,14 +167,12 @@ const VERSION_COPY: Record<string, Partial<Record<Language, Partial<VersionPrese
       overrides: { optionLabel: 'Shindo Client 1.16.5' },
     },
   },
-}
+};
 
-function applyLocalization(
-  descriptor: VersionPresentationConfig,
-): VersionPresentationConfig {
-  const lang: Language = getLanguage()
-  const overrides = VERSION_COPY[descriptor.id]?.[lang] ?? VERSION_COPY.default?.[lang]
-  if (!overrides) return descriptor
+function applyLocalization(descriptor: VersionPresentationConfig): VersionPresentationConfig {
+  const lang: Language = getLanguage();
+  const overrides = VERSION_COPY[descriptor.id]?.[lang] ?? VERSION_COPY.default?.[lang];
+  if (!overrides) return descriptor;
   return {
     ...descriptor,
     ...overrides,
@@ -177,59 +180,64 @@ function applyLocalization(
       ...descriptor.overrides,
       ...overrides.overrides,
     },
-  }
+  };
 }
 
 function resolveDescriptor(state: ClientStatePayload | null): VersionPresentationConfig {
   if (!state) {
-    return applyLocalization(FALLBACK_PRESENTATION)
+    return applyLocalization(FALLBACK_PRESENTATION);
   }
 
-  const versionId = state.versionId
+  const versionId = state.versionId;
 
   if (versionId === 'ShindoClient') {
-    const baseKey = state.baseVersion ? `ShindoClient-${state.baseVersion}` : null
+    const baseKey = state.baseVersion ? `ShindoClient-${state.baseVersion}` : null;
     if (baseKey && VERSION_PRESENTATIONS[baseKey]) {
-      return applyLocalization(VERSION_PRESENTATIONS[baseKey])
+      return applyLocalization(VERSION_PRESENTATIONS[baseKey]);
     }
   }
 
   if (versionId && VERSION_PRESENTATIONS[versionId]) {
-    return applyLocalization(VERSION_PRESENTATIONS[versionId])
+    return applyLocalization(VERSION_PRESENTATIONS[versionId]);
   }
 
-  return applyLocalization(FALLBACK_PRESENTATION)
+  return applyLocalization(FALLBACK_PRESENTATION);
 }
 
 interface PresentationContext {
-  baseVersion: string
-  build: string
+  baseVersion: string;
+  build: string;
 }
 
-function createContext(state: ClientStatePayload | null, overrides?: VersionPresentationConfig['overrides']): PresentationContext {
-  const baseVersion = overrides?.baseVersion ?? state?.baseVersion ?? '1.8.9'
-  const build = overrides?.build ?? state?.version ?? '5109'
-  return { baseVersion, build }
+function createContext(
+  state: ClientStatePayload | null,
+  overrides?: VersionPresentationConfig['overrides'],
+): PresentationContext {
+  const baseVersion = overrides?.baseVersion ?? state?.baseVersion ?? '1.8.9';
+  const build = overrides?.build ?? state?.version ?? '5109';
+  return { baseVersion, build };
 }
 
 function resolveBackground(visual: VersionVisualConfig): string {
   if (visual.image) {
-    return `linear-gradient(180deg, rgba(15, 23, 42, 0.65), rgba(15, 23, 42, 0.85)), url(${visual.image})`
+    return `linear-gradient(180deg, rgba(15, 23, 42, 0.65), rgba(15, 23, 42, 0.85)), url(${visual.image})`;
   }
   if (visual.gradient) {
-    return visual.gradient
+    return visual.gradient;
   }
-  return 'linear-gradient(135deg, rgba(129, 140, 248, 0.35), rgba(30, 41, 59, 0.85))'
+  return 'linear-gradient(135deg, rgba(129, 140, 248, 0.35), rgba(30, 41, 59, 0.85))';
 }
 
-export function resolveVersionPresentation(state: ClientStatePayload | null): ResolvedVersionPresentation {
-  const descriptor = resolveDescriptor(state)
-  const context = createContext(state, descriptor.overrides)
-  const optionTemplate = descriptor.overrides?.optionLabel
+export function resolveVersionPresentation(
+  state: ClientStatePayload | null,
+): ResolvedVersionPresentation {
+  const descriptor = resolveDescriptor(state);
+  const context = createContext(state, descriptor.overrides);
+  const optionTemplate = descriptor.overrides?.optionLabel;
 
   const optionLabel = optionTemplate
     ? optionTemplate.replace('{build}', context.build).replace('{baseVersion}', context.baseVersion)
-    : `${descriptor.name} (${context.baseVersion})`
+    : `${descriptor.name} (${context.baseVersion})`;
 
   return {
     id: descriptor.id,
@@ -241,5 +249,5 @@ export function resolveVersionPresentation(state: ClientStatePayload | null): Re
     accent: descriptor.visual.accent ?? '#6366f1',
     backgroundImage: resolveBackground(descriptor.visual),
     optionLabel,
-  }
+  };
 }

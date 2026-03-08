@@ -7,77 +7,37 @@
   import { t } from '../i18n';
   import { appStore } from '../store/appStore';
 
-  const TITLE = 'SHINDO LAUNCHER'
-  const { setScreen } = appStore
-  let versionLabel: string | null = null
+  const TITLE = 'SHINDO LAUNCHER';
+  const { setScreen } = appStore;
+  let versionLabel: string | null = null;
 
   function minimize() {
-    window.shindo.minimizeWindow().catch((error) => console.error('Failed to minimize window', error))
+    window.shindo
+      .minimizeWindow()
+      .catch((error) => console.error('Failed to minimize window', error));
   }
 
   function close() {
-    window.shindo.closeWindow().catch((error) => console.error('Failed to close window', error))
+    window.shindo.closeWindow().catch((error) => console.error('Failed to close window', error));
   }
 
   function toggleSettings(event: MouseEvent) {
-    event.stopPropagation()
-    const currentScreen = $appStore.screen
-    setScreen(currentScreen === 'settings' ? 'home' : 'settings')
+    event.stopPropagation();
+    const currentScreen = $appStore.screen;
+    setScreen(currentScreen === 'settings' ? 'home' : 'settings');
   }
 
   onMount(() => {
     window.shindo
       .getVersion()
       .then((value) => {
-        versionLabel = value.trim() ? value : null
+        versionLabel = value.trim() ? value : null;
       })
-      .catch((error) => console.error('Failed to fetch launcher version', error))
-  })
+      .catch((error) => console.error('Failed to fetch launcher version', error));
+  });
 
-  $: isSettingsOpen = $appStore.screen === 'settings'
+  $: isSettingsOpen = $appStore.screen === 'settings';
 </script>
-
-<header class="title-bar" role="presentation" on:dblclick|preventDefault|stopPropagation={() => null}>
-  <div class="title-left">
-    <img class="logo" src={logoUrl} alt="Shindo Launcher Logo" draggable="false" />
-    <span class="title-text">
-      {TITLE}
-      {#if versionLabel}
-        <span class="title-version">v{versionLabel}</span>
-      {/if}
-    </span>
-  </div>
-  <div class="title-controls" role="group" aria-label={$t('titleBar.controls')}>
-    <button
-      type="button"
-      class={`control-button settings ${isSettingsOpen ? 'active' : ''}`}
-      title={isSettingsOpen ? $t('titleBar.settingsBack') : $t('titleBar.settingsOpen')}
-      aria-label={$t('titleBar.settingsAria')}
-      aria-pressed={isSettingsOpen}
-      on:click|stopPropagation={toggleSettings}
-    >
-      <Settings class="icon" aria-hidden="true" />
-    </button>
-    <button
-      type="button"
-      class="control-button"
-      title={$t('titleBar.minimize')}
-      aria-label={$t('titleBar.minimize')}
-      on:click|stopPropagation={minimize}
-    >
-      <Minus class="icon" aria-hidden="true" />
-    </button>
-    <button
-      type="button"
-      class="control-button close"
-      title={$t('titleBar.close')}
-      aria-label={$t('titleBar.close')}
-      on:click|stopPropagation={close}
-    >
-      <X class="icon" aria-hidden="true" />
-    </button>
-  </div>
-</header>
 
 <style>
   .title-bar {
@@ -188,3 +148,49 @@
     color: #93c5fd;
   }
 </style>
+
+<header
+  class="title-bar"
+  role="presentation"
+  on:dblclick|preventDefault|stopPropagation={() => null}
+>
+  <div class="title-left">
+    <img class="logo" src={logoUrl} alt="Shindo Launcher Logo" draggable="false" />
+    <span class="title-text">
+      {TITLE}
+      {#if versionLabel}
+        <span class="title-version">v{versionLabel}</span>
+      {/if}
+    </span>
+  </div>
+  <div class="title-controls" role="group" aria-label={$t('titleBar.controls')}>
+    <button
+      type="button"
+      class={`control-button settings ${isSettingsOpen ? 'active' : ''}`}
+      title={isSettingsOpen ? $t('titleBar.settingsBack') : $t('titleBar.settingsOpen')}
+      aria-label={$t('titleBar.settingsAria')}
+      aria-pressed={isSettingsOpen}
+      on:click|stopPropagation={toggleSettings}
+    >
+      <Settings class="icon" aria-hidden="true" />
+    </button>
+    <button
+      type="button"
+      class="control-button"
+      title={$t('titleBar.minimize')}
+      aria-label={$t('titleBar.minimize')}
+      on:click|stopPropagation={minimize}
+    >
+      <Minus class="icon" aria-hidden="true" />
+    </button>
+    <button
+      type="button"
+      class="control-button close"
+      title={$t('titleBar.close')}
+      aria-label={$t('titleBar.close')}
+      on:click|stopPropagation={close}
+    >
+      <X class="icon" aria-hidden="true" />
+    </button>
+  </div>
+</header>

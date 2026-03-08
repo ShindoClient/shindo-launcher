@@ -1,6 +1,6 @@
-import { derived, get, writable } from 'svelte/store'
+import { derived, get, writable } from 'svelte/store';
 
-export type Language = 'en' | 'pt'
+export type Language = 'en' | 'pt';
 
 const translations: Record<Language, Record<string, any>> = {
   en: {
@@ -90,10 +90,12 @@ const translations: Record<Language, Record<string, any>> = {
       saveOffline: 'Save offline account',
       offlineInfo: 'Each offline account gets a unique UUID and can be selected for launch.',
       microsoftTitle: 'Sign in with Microsoft',
-      microsoftDescription: 'Official authentication with WebView and full premium multiplayer support.',
+      microsoftDescription:
+        'Official authentication with WebView and full premium multiplayer support.',
       loginButton: 'Sign in with Microsoft',
       loginAuthenticating: 'Authenticating...',
-      loginNotice: 'Login opens a secure Microsoft window. Your credentials are never stored by the launcher.',
+      loginNotice:
+        'Login opens a secure Microsoft window. Your credentials are never stored by the launcher.',
       totalAccounts: 'Total accounts',
       limitReached: 'Maximum of {limit} accounts reached. Remove one to add more.',
       error: 'An error occurred',
@@ -205,15 +207,18 @@ const translations: Record<Language, Record<string, any>> = {
       playerName: 'Nome do jogador',
       offlinePlaceholder: 'Ex: ShindoPlayer',
       saveOffline: 'Salvar conta offline',
-      offlineInfo: 'Cada conta offline ganha um UUID exclusivo e pode ser selecionada para lançamento.',
+      offlineInfo:
+        'Cada conta offline ganha um UUID exclusivo e pode ser selecionada para lançamento.',
       microsoftTitle: 'Entrar com Microsoft',
-      microsoftDescription: 'Autenticação oficial com WebView e suporte total ao multiplayer premium.',
+      microsoftDescription:
+        'Autenticação oficial com WebView e suporte total ao multiplayer premium.',
       loginButton: 'Entrar com Microsoft',
       loginAuthenticating: 'Autenticando...',
       loginNotice:
         'O login abre uma janela segura da Microsoft. Suas credenciais nunca são armazenadas pelo launcher.',
       totalAccounts: 'Total de contas',
-      limitReached: 'Limite máximo de {limit} contas atingido. Remova alguma conta para adicionar novas.',
+      limitReached:
+        'Limite máximo de {limit} contas atingido. Remova alguma conta para adicionar novas.',
       error: 'Ocorreu um erro',
       yourAccounts: 'Suas contas',
       chooseProfile: 'Escolha qual perfil quer usar durante o lançamento.',
@@ -238,41 +243,38 @@ const translations: Record<Language, Record<string, any>> = {
       empty: 'Os registros do cliente aparecer?o aqui assim que chegarem.',
     },
   },
-}
+};
 
 function resolveKey(lang: Language, key: string): string | undefined {
-  return key.split('.').reduce<any>((acc, part) => acc?.[part], translations[lang])
+  return key.split('.').reduce<any>((acc, part) => acc?.[part], translations[lang]);
 }
 
 function formatValue(template: string, params?: Record<string, string | number>): string {
-  if (!params) return template
+  if (!params) return template;
   return template.replace(/\{(\w+)\}/g, (match, token) => {
-    const value = params[token]
-    return value === undefined ? match : String(value)
-  })
+    const value = params[token];
+    return value === undefined ? match : String(value);
+  });
 }
 
-const language = writable<Language>('en')
+const language = writable<Language>('en');
 
 export const t = derived(language, ($language) => {
   return (key: string, params?: Record<string, string | number>) => {
-    const message =
-      resolveKey($language, key) ??
-      resolveKey('en', key) ??
-      key
-    return formatValue(String(message), params)
-  }
-})
+    const message = resolveKey($language, key) ?? resolveKey('en', key) ?? key;
+    return formatValue(String(message), params);
+  };
+});
 
 export function setLanguage(next: Language): void {
-  language.set(next)
+  language.set(next);
 }
 
 export function getLanguage(): Language {
-  return get(language)
+  return get(language);
 }
 
 export const availableLanguages: Array<{ code: Language; label: string }> = [
   { code: 'en', label: 'English' },
   { code: 'pt', label: 'Português' },
-]
+];

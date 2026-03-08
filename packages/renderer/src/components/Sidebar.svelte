@@ -1,44 +1,24 @@
 <script lang="ts">
-  import { appStore } from '../store/appStore'
-  import Home from 'lucide-svelte/icons/home'
-  import Settings from 'lucide-svelte/icons/settings'
+  import { appStore } from '../store/appStore';
+  import Home from 'lucide-svelte/icons/home';
+  import Settings from 'lucide-svelte/icons/settings';
 
-  const { setScreen } = appStore
+  const { setScreen } = appStore;
 
-  const navItems: Array<{ id: 'home' | 'settings'; label: string; icon: typeof Home; screen: 'home' | 'settings' }> = [
+  const navItems: Array<{
+    id: 'home' | 'settings';
+    label: string;
+    icon: typeof Home;
+    screen: 'home' | 'settings';
+  }> = [
     { id: 'home', label: 'Home', icon: Home, screen: 'home' },
     { id: 'settings', label: 'Settings', icon: Settings, screen: 'settings' },
-  ]
+  ];
 
   function handleNavClick(screen: 'home' | 'settings') {
-    setScreen(screen)
+    setScreen(screen);
   }
 </script>
-
-<div class="sidebar">
-  <div class="sidebar-header">
-    <div class="logo-section">
-      <div class="logo">S</div>
-    </div>
-  </div>
-
-  <nav class="nav-menu">
-    {#each navItems as item}
-      <button
-        class="nav-item { $appStore.screen === item.screen ? 'selected' : '' }"
-        on:click={() => handleNavClick(item.screen)}
-        aria-label={item.label}
-      >
-        <span class="nav-icon">
-          <svelte:component this={item.icon} />
-        </span>
-        {#if $appStore.screen === item.screen}
-          <div class="nav-indicator"></div>
-        {/if}
-      </button>
-    {/each}
-  </nav>
-</div>
 
 <style>
   .sidebar {
@@ -136,3 +116,28 @@
     box-shadow: 0 0 8px #3b82f6;
   }
 </style>
+
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo-section">
+      <div class="logo">S</div>
+    </div>
+  </div>
+
+  <nav class="nav-menu">
+    {#each navItems as item}
+      <button
+        class="nav-item {$appStore.screen === item.screen ? 'selected' : ''}"
+        on:click={() => handleNavClick(item.screen)}
+        aria-label={item.label}
+      >
+        <span class="nav-icon">
+          <svelte:component this={item.icon} />
+        </span>
+        {#if $appStore.screen === item.screen}
+          <div class="nav-indicator"></div>
+        {/if}
+      </button>
+    {/each}
+  </nav>
+</div>
