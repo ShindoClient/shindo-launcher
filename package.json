@@ -116,7 +116,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "MikiDevAHM",
+        "owner": "ShindoClient",
         "repo": "shindo-launcher"
       }
     ],
