@@ -43,4 +43,4 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           TARGETS: ${{ matrix.targets }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bun publish
+        run: bun run publish
