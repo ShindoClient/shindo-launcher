@@ -3,6 +3,7 @@ name: Release Launcher
 on:
   release:
     types: [created]
+  workflow_dispatch:
 
 jobs:
   make:
@@ -13,13 +14,13 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            targets: "appimage;deb"
+            targets: 'appimage;deb'
           - os: windows-latest
             platform: win32
             targets: nsis
           - os: macos-latest
             platform: darwin
-            targets: "dmg;zip"
+            targets: 'dmg;zip'
     steps:
       - uses: actions/checkout@v4
       - name: Setup Bun
