@@ -42,5 +42,5 @@ jobs:
         run: bun run build:app
       - name: Release installable
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.SHINDO_GH_TOKEN }}
         run: bun run ${{ matrix.script }}
