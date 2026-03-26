@@ -10,15 +10,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        platformMap:
-          ubuntu-latest: linux
-          windows-latest: win32
-          macos-latest: darwin
-        targetMap:
-          linux: "appimage;deb"
-          win32: "nsis"
-          darwin: "dmg;zip"
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            targets: "appimage;deb"
+          - os: windows-latest
+            platform: win32
+            targets: nsis
+          - os: macos-latest
+            platform: darwin
+            targets: "dmg;zip"
     steps:
       - uses: actions/checkout@v4
       - name: Setup Bun
@@ -29,16 +30,16 @@ jobs:
         run: bun run build:app
       - name: Package app
         env:
-          PLATFORM: ${{ matrix.platformMap[matrix.os] }}
+          PLATFORM: ${{ matrix.platform }}
         run: bun package
       - name: Make installers
         env:
-          PLATFORM: ${{ matrix.platformMap[matrix.os] }}
-          TARGETS: ${{ matrix.targetMap[matrix.platformMap[matrix.os]] }}
+          PLATFORM: ${{ matrix.platform }}
+          TARGETS: ${{ matrix.targets }}
         run: bun make
       - name: Publish release assets
         env:
-          PLATFORM: ${{ matrix.platformMap[matrix.os] }}
-          TARGETS: ${{ matrix.targetMap[matrix.platformMap[matrix.os]] }}
+          PLATFORM: ${{ matrix.platform }}
+          TARGETS: ${{ matrix.targets }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bun publish
