@@ -117,7 +117,8 @@
       {
         "provider": "github",
         "owner": "ShindoClient",
-        "repo": "shindo-launcher"
+        "repo": "shindo-launcher",
+        "releaseType": "release"
       }
     ],
     "win": {
