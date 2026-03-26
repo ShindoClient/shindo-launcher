@@ -1,155 +1,44 @@
 name: Release Launcher
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
-  workflow_dispatch:
-
-permissions:
-  contents: write
+  release:
+    types: [created]
 
 jobs:
-  package-windows:
-    runs-on: windows-latest
-    env:
-      GH_TOKEN: ${{ secrets.GH_PAT }}
-      GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+  make:
+    name: Build & publish
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        platformMap:
+          ubuntu-latest: linux
+          windows-latest: win32
+          macos-latest: darwin
+        targetMap:
+          linux: "appimage;deb"
+          win32: "nsis"
+          darwin: "dmg;zip"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
+      - uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/bun@v1
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build installer
-        run: pnpm package -- --win
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: shindo-launcher-windows
-          path: |
-            release/**/*.exe
-            release/**/*.zip
-          if-no-files-found: error
-
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            release/**/*.exe
-            release/**/*.zip
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-          allow_updates: true
+        run: bun install
+      - name: Build project
+        run: bun run build:app
+      - name: Package app
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-
-  package-macos:
-    runs-on: macos-latest
-    env:
-      GH_TOKEN: ${{ secrets.GH_PAT }}
-      GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build dmg
-        run: pnpm package -- --mac
+          PLATFORM: ${{ matrix.platformMap[matrix.os] }}
+        run: bun package
+      - name: Make installers
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: shindo-launcher-macos
-          path: |
-            release/**/*.dmg
-            release/**/*.zip
-          if-no-files-found: error
-
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            release/**/*.dmg
-            release/**/*.zip
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-          allow_updates: true
+          PLATFORM: ${{ matrix.platformMap[matrix.os] }}
+          TARGETS: ${{ matrix.targetMap[matrix.platformMap[matrix.os]] }}
+        run: bun make
+      - name: Publish release assets
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-
-  package-linux:
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GH_PAT }}
-      GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build AppImage and deb
-        run: pnpm package -- --linux
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: shindo-launcher-linux
-          path: |
-            release/**/*.AppImage
-            release/**/*.deb
-          if-no-files-found: error
-
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            release/**/*.AppImage
-            release/**/*.deb
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-          allow_updates: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          PLATFORM: ${{ matrix.platformMap[matrix.os] }}
+          TARGETS: ${{ matrix.targetMap[matrix.platformMap[matrix.os]] }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun publish

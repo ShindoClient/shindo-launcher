@@ -5,7 +5,7 @@
   import UpdateScreen from './screens/UpdateScreen.svelte';
   import HomeScreen from './screens/HomeScreen.svelte';
   import SettingsScreen from './screens/SettingsScreen.svelte';
-  import Sidebar from './components/Sidebar.svelte';
+  import NotificationCenter from './components/NotificationCenter.svelte';
 
   const { init } = appStore;
 
@@ -14,12 +14,10 @@
   });
 </script>
 
-<div class="flex h-screen w-screen flex-col bg-black">
+<div class="launcher-shell">
   <TitleBar />
-  <div class="flex min-h-0 w-full flex-1">
-    {#if $appStore.screen !== 'update'}
-      <Sidebar />
-    {/if}
+  <NotificationCenter />
+  <div class="content-area">
     <div class="flex min-h-0 w-full flex-1">
       {#if $appStore.screen === 'update'}
         <UpdateScreen />
@@ -31,3 +29,22 @@
     </div>
   </div>
 </div>
+
+<style>
+  .launcher-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    background: #000;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .content-area {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    width: 100%;
+  }
+</style>

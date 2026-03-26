@@ -1,7 +1,8 @@
 {
   "name": "shindo-launcher",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
+  "license": "MIT",
   "description": "Shindo Launcher desktop app",
   "authors": {
     "name": [
@@ -22,22 +23,27 @@
     "watch:main": "tsc -p packages/main/tsconfig.json --watch",
     "watch:preload": "tsc -p packages/preload/tsconfig.json --watch",
     "watch:shared": "tsc -p packages/shared/tsconfig.json --watch",
-    "build": "bun clean && bun build:shared && bun build:preload && bun build:main && bun build:renderer",
+    "build:app": "bun clean && bun build:shared && bun build:preload && bun build:main && bun build:renderer",
     "build:shared": "tsc -p packages/shared/tsconfig.json",
     "build:preload": "tsc -p packages/preload/tsconfig.json",
     "build:main": "tsc -p packages/main/tsconfig.json",
     "build:renderer": "cd packages/renderer && vite build",
     "preview": "cd packages/renderer && vite preview",
     "clean": "rimraf dist",
-    "package": "bun build && electron-builder",
+    "package": "electron-forge package",
+    "publish": "bun run build:app && electron-forge publish --platform=$PLATFORM --targets=$TARGETS --publish=always",
     "lint": "echo \"TODO: add linting\"",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "start": "electron-forge start",
+    "make": "electron-forge make"
   },
   "dependencies": {
     "@shindo/shared": "workspace:*",
+    "app-builder-lib": "^26.8.1",
     "electron-context-menu": "^4.1.1",
     "electron-reloader": "^1.2.3",
     "electron-serve": "^3.0.0",
+    "electron-squirrel-startup": "^1.0.1",
     "electron-updater": "^6.3.9",
     "electron-window-state": "^5.0.3",
     "lucide-svelte": "^0.329.0",
@@ -47,11 +53,23 @@
     "tar": "^6.2.0"
   },
   "devDependencies": {
-    "@electron/packager": "^19.0.1",
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-deb": "^7.11.1",
+    "@electron-forge/maker-dmg": "^7.9.0",
+    "@electron-forge/maker-rpm": "^7.11.1",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "@electron-forge/maker-wix": "^7.9.0",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
+    "@electron-forge/plugin-fuses": "^7.11.1",
+    "@electron-forge/publisher-github": "^7.9.0",
+    "@electron-forge/shared-types": "^7.11.1",
+    "@electron/fuses": "^1.8.0",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.47.2",
     "@sveltejs/vite-plugin-svelte": "^3.1.1",
     "@types/adm-zip": "^0.5.7",
+    "@types/bun": "latest",
     "@types/node": "^22.10.1",
     "@types/semver": "^7.5.8",
     "@types/tar": "^6.1.13",
@@ -59,8 +77,9 @@
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "^29.3.0",
-    "electron-builder": "^24.9.1",
     "electron-connect": "^0.6.3",
+    "electron-forge-maker-appimage": "^26.8.1",
+    "electron-forge-maker-nsis": "^26.8.1",
     "postcss": "^8.4.32",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "rimraf": "^5.0.5",
@@ -72,87 +91,8 @@
     "vite": "^5.0.11",
     "wait-on": "^7.2.0"
   },
-  "build": {
-    "appId": "com.shindo.launcher",
-    "productName": "Shindo Launcher",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/main/**/*",
-      "dist/preload/**/*",
-      "dist/shared/**/*",
-      "dist/renderer/**/*",
-      "node_modules/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "packages/renderer/src/assets/logo.ico",
-        "to": "logo.ico"
-      },
-      {
-        "from": "packages/renderer/src/assets/logo.icns",
-        "to": "logo.icns"
-      },
-      {
-        "from": "packages/renderer/src/assets/logo.png",
-        "to": "logo.png"
-      }
-    ],
-    "extraMetadata": {
-      "main": "dist/main/main.js"
-    },
-    "asar": true,
-    "win": {
-      "icon": "packages/renderer/src/assets/logo.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "mac": {
-      "category": "public.app-category.games",
-      "icon": "packages/renderer/src/assets/logo.icns",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ]
-    },
-    "linux": {
-      "icon": "packages/renderer/src/assets/logo.png",
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "deb",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "category": "Game"
-    },
-    "nsis": {
-      "installerIcon": "packages/renderer/src/assets/logo.ico",
-      "uninstallerIcon": "packages/renderer/src/assets/logo.ico",
-      "installerHeaderIcon": "packages/renderer/src/assets/logo.ico",
-      "createDesktopShortcut": "always",
-      "createStartMenuShortcut": true,
-      "shortcutName": "Shindo Launcher"
-    }
-  }
+  "trustedDependencies": [
+    "@bitdisaster/exe-icon-extractor",
+    "svelte-preprocess"
+  ]
 }

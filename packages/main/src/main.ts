@@ -1,11 +1,20 @@
 import {
   IpcChannel,
   IpcEvent,
+  type JreStatusPayload,
   type LaunchLogEntry,
   type LaunchLogLevel,
   type LauncherConfig,
 } from '@shindo/shared';
-import { BrowserWindow, app, ipcMain, nativeImage, shell } from 'electron';
+import {
+  BrowserWindow,
+  OpenDialogOptions,
+  app,
+  dialog,
+  ipcMain,
+  nativeImage,
+  shell,
+} from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { accountService } from './services/accountService';
@@ -123,11 +132,21 @@ function createWindowIcon() {
 let mainWindow: BrowserWindow | null = null;
 let logWindow: BrowserWindow | null = null;
 const launcherService = new LauncherService();
+launcherService.setJreNotifier((payload) => {
+  broadcastJreStatus({
+    ...payload,
+    source: 'launch',
+  });
+});
 
 function broadcast(event: IpcEvent, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send(event, payload);
   }
+}
+
+function broadcastJreStatus(payload: JreStatusPayload): void {
+  broadcast(IpcEvent.JreStatus, payload);
 }
 
 async function createWindow(): Promise<void> {
@@ -369,12 +388,34 @@ ipcMain.handle(IpcChannel.ConfigSet, async (_event, patch) => {
   if (shouldReconcileRuntime) {
     const result = await ensureJre(next);
     logMessage('info', result.message);
+    broadcastJreStatus({
+      message: result.message,
+      severity: result.patch ? 'warning' : 'info',
+      source: 'config',
+    });
     if (result.patch) {
       next = updateConfig(result.patch);
     }
   }
 
   return next;
+});
+
+ipcMain.handle(IpcChannel.JavaChoosePath, async (event, options) => {
+  const parent = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+  const dialogOptions: OpenDialogOptions = {
+    title: 'Select Java executable',
+    buttonLabel: 'Choose Java',
+    defaultPath: options?.defaultPath,
+    properties: ['openFile'] as const,
+  };
+  const { canceled, filePaths } = parent
+    ? await dialog.showOpenDialog(parent, dialogOptions)
+    : await dialog.showOpenDialog(dialogOptions);
+  if (canceled || filePaths.length === 0) {
+    return null;
+  }
+  return filePaths[0];
 });
 
 ipcMain.handle(IpcChannel.SystemMemory, () => getSystemMemory());

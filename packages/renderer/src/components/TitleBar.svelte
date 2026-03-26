@@ -1,6 +1,7 @@
 <script lang="ts">
   import Minus from 'lucide-svelte/icons/minus';
   import Settings from 'lucide-svelte/icons/settings';
+  import Home from 'lucide-svelte/icons/home';
   import X from 'lucide-svelte/icons/x';
   import { onMount } from 'svelte';
   import logoUrl from '../assets/logo.png';
@@ -21,10 +22,12 @@
     window.shindo.closeWindow().catch((error) => console.error('Failed to close window', error));
   }
 
-  function toggleSettings(event: MouseEvent) {
-    event.stopPropagation();
-    const currentScreen = $appStore.screen;
-    setScreen(currentScreen === 'settings' ? 'home' : 'settings');
+  function goHome() {
+    setScreen('home');
+  }
+
+  function goSettings() {
+    setScreen('settings');
   }
 
   onMount(() => {
@@ -44,8 +47,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 60px;
-    padding: 0 16px;
+    height: 72px;
+    padding: 0 20px;
     background: #000000;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     color: #ffffff;
@@ -59,6 +62,14 @@
     align-items: center;
     gap: 10px;
     min-width: 0;
+  }
+
+  .title-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex: 1;
   }
 
   .logo {
@@ -132,65 +143,83 @@
     color: #fca5a5;
   }
 
-  .control-button.settings {
-    background: rgba(59, 130, 246, 0.1);
-    border-color: rgba(59, 130, 246, 0.2);
+  .control-button.nav {
+    width: 40px;
+    height: 40px;
+    background: rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, 0.25);
+    transition: box-shadow 0.25s ease;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.35);
+    -webkit-app-region: no-drag;
   }
 
-  .control-button.settings:hover {
-    background: rgba(59, 130, 246, 0.15);
-    border-color: rgba(59, 130, 246, 0.3);
-  }
-
-  .control-button.settings.active {
-    background: rgba(59, 130, 246, 0.2);
+  .control-button.nav.active {
+    background: rgba(59, 130, 246, 0.18);
     border-color: rgba(59, 130, 246, 0.4);
-    color: #93c5fd;
+    box-shadow: 0 10px 28px rgba(59, 130, 246, 0.3);
+  }
+
+  @keyframes floatNav {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
   }
 </style>
 
-<header
-  class="title-bar"
-  role="presentation"
-  on:dblclick|preventDefault|stopPropagation={() => null}
->
-  <div class="title-left">
-    <img class="logo" src={logoUrl} alt="Shindo Launcher Logo" draggable="false" />
-    <span class="title-text">
-      {TITLE}
-      {#if versionLabel}
-        <span class="title-version">v{versionLabel}</span>
-      {/if}
-    </span>
-  </div>
-  <div class="title-controls" role="group" aria-label={$t('titleBar.controls')}>
-    <button
-      type="button"
-      class={`control-button settings ${isSettingsOpen ? 'active' : ''}`}
-      title={isSettingsOpen ? $t('titleBar.settingsBack') : $t('titleBar.settingsOpen')}
-      aria-label={$t('titleBar.settingsAria')}
-      aria-pressed={isSettingsOpen}
-      on:click|stopPropagation={toggleSettings}
-    >
-      <Settings class="icon" aria-hidden="true" />
-    </button>
-    <button
-      type="button"
-      class="control-button"
-      title={$t('titleBar.minimize')}
-      aria-label={$t('titleBar.minimize')}
-      on:click|stopPropagation={minimize}
-    >
-      <Minus class="icon" aria-hidden="true" />
-    </button>
-    <button
-      type="button"
-      class="control-button close"
-      title={$t('titleBar.close')}
-      aria-label={$t('titleBar.close')}
-      on:click|stopPropagation={close}
-    >
-      <X class="icon" aria-hidden="true" />
-    </button>
-  </div>
-</header>
+  <header
+    class="title-bar"
+    role="presentation"
+    on:dblclick|preventDefault|stopPropagation={() => null}
+  >
+    <div class="title-left">
+      <img class="logo" src={logoUrl} alt="Shindo Launcher Logo" draggable="false" />
+      <span class="title-text">
+        {TITLE}
+        {#if versionLabel}
+          <span class="title-version">v{versionLabel}</span>
+        {/if}
+      </span>
+    </div>
+    <div class="title-center">
+      <button
+        type="button"
+        class={`control-button nav ${$appStore.screen === 'home' ? 'active' : ''}`}
+        aria-label="Home"
+        on:click|stopPropagation={goHome}
+      >
+        <Home class="icon" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        class={`control-button nav ${$appStore.screen === 'settings' ? 'active' : ''}`}
+        aria-label="Settings"
+        on:click|stopPropagation={goSettings}
+      >
+        <Settings class="icon" aria-hidden="true" />
+      </button>
+    </div>
+    <div class="title-controls" role="group" aria-label={$t('titleBar.controls')}>
+      <button
+        type="button"
+        class="control-button"
+        title={$t('titleBar.minimize')}
+        aria-label={$t('titleBar.minimize')}
+        on:click|stopPropagation={minimize}
+      >
+        <Minus class="icon" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        class="control-button close"
+        title={$t('titleBar.close')}
+        aria-label={$t('titleBar.close')}
+        on:click|stopPropagation={close}
+      >
+        <X class="icon" aria-hidden="true" />
+      </button>
+    </div>
+  </header>

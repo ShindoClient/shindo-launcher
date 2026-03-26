@@ -3,3 +3,5 @@ dist/
 release/
 *.tsbuildinfo
 packages/renderer/.devserver.json
+
+out/

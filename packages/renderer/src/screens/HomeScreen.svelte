@@ -280,6 +280,10 @@
     top: 20px;
     right: 30px;
     z-index: 30;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    width: max-content;
   }
 
   .account-toggle {
@@ -341,12 +345,17 @@
   }
 
   .account-dropdown {
-    margin-top: 10px;
-    width: 320px;
-    background: #121212;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: absolute;
+    right: 0;
+    top: calc(100% + 10px);
+    width: 270px;
+    min-width: 270px;
+    background: rgba(15, 23, 42, 0.96);
+    border: 1px solid rgba(59, 130, 246, 0.25);
     border-radius: 12px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+    box-shadow:
+      0 20px 40px rgba(0, 0, 0, 0.4),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.02);
     overflow: hidden;
   }
 

@@ -20,6 +20,8 @@ import type {
   OfflineAccountRequestPayload,
   AccountSelectionPayload,
   LaunchLogEntry,
+  JreStatusPayload,
+  JavaChooserOptions,
 } from '@shindo/shared';
 
 type EventPayload<T extends IpcEvent> = T extends IpcEvent.UpdateProgress
@@ -61,6 +63,8 @@ const bridge: LauncherBridge = {
   getSystemMemory: () => ipcRenderer.invoke(IpcChannel.SystemMemory) as Promise<SystemMemoryInfo>,
   runStartupUpdate: () => ipcRenderer.invoke(IpcChannel.RunStartupUpdate) as Promise<void>,
   getVersion: () => ipcRenderer.invoke(IpcChannel.AppVersion) as Promise<string>,
+  chooseJavaExecutable: (options?: JavaChooserOptions) =>
+    ipcRenderer.invoke(IpcChannel.JavaChoosePath, options) as Promise<string | null>,
   getLaunchLogs: () => ipcRenderer.invoke(IpcChannel.LaunchLogHistory) as Promise<LaunchLogEntry[]>,
   clearLaunchLogs: () => ipcRenderer.invoke(IpcChannel.LaunchLogClear) as Promise<void>,
   getVersionCatalog: () =>
@@ -83,6 +87,7 @@ const bridge: LauncherBridge = {
   onUpdateError: (callback) => registerEvent(IpcEvent.UpdateError, callback),
   onLaunchLog: (callback) => registerEvent(IpcEvent.LaunchLog, callback),
   onLaunchExit: (callback) => registerEvent(IpcEvent.LaunchExit, callback),
+  onJreStatus: (callback) => registerEvent(IpcEvent.JreStatus, callback),
 };
 
 contextBridge.exposeInMainWorld('shindo', bridge);

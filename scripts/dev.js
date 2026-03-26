@@ -56,11 +56,11 @@ async function findAvailablePort(host, startPort) {
 
   const { result } = concurrently(
     [
-      { command: 'pnpm run dev:renderer', name: 'dev:renderer' },
-      { command: 'pnpm run watch:shared', name: 'watch:shared' },
-      { command: 'pnpm run watch:preload', name: 'watch:preload' },
-      { command: 'pnpm run watch:main', name: 'watch:main' },
-      { command: 'pnpm run dev:electron', name: 'dev:electron' },
+      { command: 'bun run dev:renderer', name: 'dev:renderer' },
+      { command: 'bun run watch:shared', name: 'watch:shared' },
+      { command: 'bun run watch:preload', name: 'watch:preload' },
+      { command: 'bun run watch:main', name: 'watch:main' },
+      { command: 'bun run dev:electron', name: 'dev:electron' },
     ],
     {
       prefix: '[{name}]',

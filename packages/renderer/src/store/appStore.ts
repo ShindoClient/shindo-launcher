@@ -1,6 +1,7 @@
 import { writable, get } from 'svelte/store';
 import type { Language } from '../i18n';
 import { setLanguage, t } from '../i18n';
+import { enqueueNotification } from './notificationStore';
 import type {
   ClientStatePayload,
   LauncherConfig,
@@ -280,6 +281,11 @@ function registerListeners(): void {
   unsubscribers.push(window.shindo.onUpdateCompleted((payload) => handleUpdateCompleted(payload)));
   unsubscribers.push(window.shindo.onUpdateError((payload) => handleUpdateError(payload)));
   unsubscribers.push(window.shindo.onLaunchExit((payload) => appendExitLog(payload)));
+  unsubscribers.push(
+    window.shindo.onJreStatus((payload) => {
+      enqueueNotification({ message: payload.message, severity: payload.severity });
+    }),
+  );
 
   store.update((state) => ({ ...state, listenersRegistered: true }));
 }
@@ -464,14 +470,6 @@ async function launch(): Promise<void> {
       launcherStatus: translate('home.status.launching'),
     };
   });
-
-  const showLogs = current.config?.showLogsOnLaunch ?? true;
-  if (showLogs) {
-    console.log('[DEBUG] Opening log window');
-    window.shindo
-      .openLogWindow()
-      .catch((error) => console.error('Failed to open log window', error));
-  }
 
   try {
     const config = get(store).config;

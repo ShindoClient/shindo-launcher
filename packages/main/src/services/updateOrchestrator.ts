@@ -106,6 +106,13 @@ export async function runStartupUpdateSequence(service: LauncherService): Promis
         if (jreResult.patch) {
           updateConfig(jreResult.patch);
         }
+        if (jreResult) {
+          emit(IpcEvent.JreStatus, {
+            message: jreResult.message,
+            severity: jreResult.patch ? 'warning' : 'info',
+            source: 'update',
+          });
+        }
       },
     });
 

@@ -23,6 +23,7 @@ export const enum IpcChannel {
   LaunchLogHistory = 'shindo:launch.log-history',
   LaunchLogClear = 'shindo:launch.log-clear',
   VersionCatalog = 'shindo:catalog.versions',
+  JavaChoosePath = 'shindo:java.choose-path',
 }
 
 export const enum IpcEvent {
@@ -31,6 +32,7 @@ export const enum IpcEvent {
   UpdateError = 'shindo:update.error',
   LaunchLog = 'shindo:launch.log',
   LaunchExit = 'shindo:launch.exit',
+  JreStatus = 'shindo:jre.status',
 }
 
 export type LaunchLogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -39,6 +41,18 @@ export interface LaunchLogEntry {
   level: LaunchLogLevel;
   message: string;
   timestamp: number;
+}
+
+export type JreStatusSeverity = 'info' | 'warning';
+
+export interface JreStatusPayload {
+  severity: JreStatusSeverity;
+  message: string;
+  source: 'config' | 'launch' | 'update';
+}
+
+export interface JavaChooserOptions {
+  defaultPath?: string;
 }
 
 export interface ReleaseAssetInfo {
@@ -165,11 +179,13 @@ export interface LauncherBridge {
   addMicrosoftAccount(): Promise<AccountsStatePayload>;
   removeAccount(payload: AccountSelectionPayload): Promise<AccountsStatePayload>;
   selectAccount(payload: AccountSelectionPayload): Promise<AccountsStatePayload>;
+  chooseJavaExecutable(options?: JavaChooserOptions): Promise<string | null>;
   onUpdateProgress(callback: (event: UpdateProgressPayload) => void): () => void;
   onUpdateCompleted(callback: (payload: UpdateCompletionPayload) => void): () => void;
   onUpdateError(callback: (payload: UpdateErrorPayload) => void): () => void;
   onLaunchLog(callback: (payload: LaunchLogPayload) => void): () => void;
   onLaunchExit(callback: (payload: LaunchExitPayload) => void): () => void;
+  onJreStatus(callback: (payload: JreStatusPayload) => void): () => void;
 }
 
 export interface LauncherConfig {

@@ -143,6 +143,15 @@ function extractCommand(proc: ChildProcessWithoutNullStreams | null): string[] {
 
 export class LauncherService {
   private activeProcess: ChildProcessWithoutNullStreams | null = null;
+  private jreNotifier:
+    | ((payload: { message: string; severity: 'info' | 'warning' }) => void)
+    | null = null;
+
+  setJreNotifier(
+    notifier: (payload: { message: string; severity: 'info' | 'warning' }) => void,
+  ): void {
+    this.jreNotifier = notifier;
+  }
 
   async ensureClientUpToDate(options?: EnsureClientOptions): Promise<ClientUpdatePayload> {
     return ensureClientUpToDate(options);
@@ -220,6 +229,10 @@ export class LauncherService {
     console.log('[LAUNCHER] Config loaded:', config);
 
     const jreResult = await ensureJre(config);
+    this.jreNotifier?.({
+      message: jreResult.message,
+      severity: jreResult.patch ? 'warning' : 'info',
+    });
     console.log('[LAUNCHER] JRE reconciliation:', jreResult.message);
     if (jreResult.patch) {
       config = updateConfig(jreResult.patch);
