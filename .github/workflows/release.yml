@@ -6,26 +6,24 @@ on:
   workflow_dispatch:
 
 jobs:
-  make:
-    name: Build, package & publish
+  release:
+    name: Build & publish
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
-            platform: linux
-            targets: '@electron-forge/maker-deb'
+            script: release:linux
           - os: windows-latest
-            platform: win32
-            targets: '@electron-forge/maker-squirrel'
+            script: release:windows
           - os: macos-latest
-            platform: darwin
-            targets: '@electron-forge/maker-zip'
-    env:
-      PLATFORM: ${{ matrix.platform }}
-      TARGETS: ${{ matrix.targets }}
+            script: release:mac
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
       - name: Cache Bun + node_modules
@@ -42,11 +40,7 @@ jobs:
         run: bun install
       - name: Build project
         run: bun run build:app
-      - name: Package app
-        run: bun package
-      - name: Make installers
-        run: bun make
-      - name: Publish release assets
+      - name: Release installable
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bun run publish
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun run ${{ matrix.script }}

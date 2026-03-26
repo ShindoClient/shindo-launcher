@@ -30,16 +30,16 @@
     "build:renderer": "cd packages/renderer && vite build",
     "preview": "cd packages/renderer && vite preview",
     "clean": "rimraf dist",
-    "package": "electron-forge package",
-    "publish": "bun run build:app && electron-forge publish --platform=$PLATFORM --targets=$TARGETS --publish=always",
+    "package": "electron-builder --dir",
+    "release:linux": "electron-builder --linux appimage --linux deb --publish=always",
+    "release:windows": "electron-builder --win nsis --publish=always",
+    "release:mac": "electron-builder --mac dmg --mac zip --publish=always",
     "lint": "echo \"TODO: add linting\"",
     "format": "prettier --write .",
-    "start": "electron-forge start",
-    "make": "electron-forge make"
+    "start": "electron ."
   },
   "dependencies": {
     "@shindo/shared": "workspace:*",
-    "app-builder-lib": "^26.8.1",
     "electron-context-menu": "^4.1.1",
     "electron-reloader": "^1.2.3",
     "electron-serve": "^3.0.0",
@@ -53,18 +53,6 @@
     "tar": "^6.2.0"
   },
   "devDependencies": {
-    "@electron-forge/cli": "^7.11.1",
-    "@electron-forge/maker-deb": "^7.11.1",
-    "@electron-forge/maker-dmg": "^7.9.0",
-    "@electron-forge/maker-rpm": "^7.11.1",
-    "@electron-forge/maker-squirrel": "^7.11.1",
-    "@electron-forge/maker-wix": "^7.9.0",
-    "@electron-forge/maker-zip": "^7.11.1",
-    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
-    "@electron-forge/plugin-fuses": "^7.11.1",
-    "@electron-forge/publisher-github": "^7.9.0",
-    "@electron-forge/shared-types": "^7.11.1",
-    "@electron/fuses": "^1.8.0",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.47.2",
     "@sveltejs/vite-plugin-svelte": "^3.1.1",
@@ -77,9 +65,8 @@
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "^29.3.0",
+    "electron-builder": "^26.8.1",
     "electron-connect": "^0.6.3",
-    "electron-forge-maker-appimage": "^26.8.1",
-    "electron-forge-maker-nsis": "^26.8.1",
     "postcss": "^8.4.32",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "rimraf": "^5.0.5",
@@ -94,5 +81,67 @@
   "trustedDependencies": [
     "@bitdisaster/exe-icon-extractor",
     "svelte-preprocess"
-  ]
+  ],
+  "build": {
+    "appId": "com.shindo.launcher",
+    "productName": "Shindo Launcher",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "packages/renderer/src/assets"
+    },
+    "files": [
+      "dist/main/**/*",
+      "dist/preload/**/*",
+      "dist/shared/**/*",
+      "dist/renderer/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "packages/renderer/src/assets/logo.ico",
+        "to": "logo.ico"
+      },
+      {
+        "from": "packages/renderer/src/assets/logo.icns",
+        "to": "logo.icns"
+      },
+      {
+        "from": "packages/renderer/src/assets/logo.png",
+        "to": "logo.png"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "MikiDevAHM",
+        "repo": "shindo-launcher"
+      }
+    ],
+    "win": {
+      "icon": "packages/renderer/src/assets/logo.ico",
+      "target": ["nsis"],
+      "publisherName": "Shindo Launcher"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Shindo Launcher"
+    },
+    "mac": {
+      "category": "public.app-category.games",
+      "icon": "packages/renderer/src/assets/logo.icns",
+      "target": ["dmg", "zip"]
+    },
+    "linux": {
+      "icon": "packages/renderer/src/assets/logo.png",
+      "target": ["AppImage", "deb"],
+      "category": "Game"
+    }
+  }
 }
