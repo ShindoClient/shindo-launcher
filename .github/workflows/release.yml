@@ -7,40 +7,46 @@ on:
 
 jobs:
   make:
-    name: Build & publish
+    name: Build, package & publish
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             platform: linux
-            targets: 'appimage,deb'
+            targets: '@electron-forge/maker-deb'
           - os: windows-latest
             platform: win32
-            targets: nsis
+            targets: '@electron-forge/maker-squirrel'
           - os: macos-latest
             platform: darwin
-            targets: 'dmg,zip'
+            targets: '@electron-forge/maker-zip'
+    env:
+      PLATFORM: ${{ matrix.platform }}
+      TARGETS: ${{ matrix.targets }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+      - name: Cache Bun + node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun
+            node_modules
+            packages/*/node_modules
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
       - name: Install dependencies
         run: bun install
       - name: Build project
         run: bun run build:app
       - name: Package app
-        env:
-          PLATFORM: ${{ matrix.platform }}
         run: bun package
       - name: Make installers
-        env:
-          PLATFORM: ${{ matrix.platform }}
-          TARGETS: ${{ matrix.targets }}
         run: bun make
       - name: Publish release assets
         env:
-          PLATFORM: ${{ matrix.platform }}
-          TARGETS: ${{ matrix.targets }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bun run publish
