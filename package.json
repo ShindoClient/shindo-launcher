@@ -2,7 +2,8 @@
   "name": "shindo-launcher",
   "private": true,
   "version": "0.2.3",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
+  "author": "MikiDevAHM <miki@mittelsdorf.me>",
   "description": "Shindo Launcher desktop app",
   "authors": {
     "name": [
@@ -121,8 +122,9 @@
     ],
     "win": {
       "icon": "packages/renderer/src/assets/logo.ico",
-      "target": ["nsis"],
-      "publisherName": "Shindo Launcher"
+      "target": [
+        "nsis"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -136,11 +138,17 @@
     "mac": {
       "category": "public.app-category.games",
       "icon": "packages/renderer/src/assets/logo.icns",
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "linux": {
       "icon": "packages/renderer/src/assets/logo.png",
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Game"
     }
   }
