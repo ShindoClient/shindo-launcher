@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
+import { ReadableStream } from 'node:stream/web';
 import AdmZip from 'adm-zip';
 import tar from 'tar';
 import type { JavaMajor, JavaValidationResult } from '@shindo/shared';
@@ -240,8 +241,8 @@ async function downloadWithProgress(
   const archivePath = path.join(os.tmpdir(), `shindo-temurin-${Date.now()}.${archiveType}`);
   const fileStream = fs.createWriteStream(archivePath);
   const sourceStream =
-    typeof (response.body as unknown as NodeJS.ReadableStream).pipe === 'function'
-      ? (response.body as unknown as NodeJS.ReadableStream)
+    typeof (response.body as unknown as ReadableStream).pipeTo === 'function'
+      ? (response.body as unknown as ReadableStream)
       : Readable.fromWeb(response.body as unknown as ReadableStream);
 
   const progressStream = new Transform({
@@ -251,11 +252,9 @@ async function downloadWithProgress(
         const percent = Math.min(99, Math.round((received / total) * 80));
         const elapsed = Math.max(1, Date.now() - startedAt) / 1000;
         const speedMb = received / 1024 / 1024 / elapsed;
-        const message = `Baixando Java... ${(
-          received /
-          1024 /
-          1024
-        ).toFixed(1)} / ${(total / 1024 / 1024).toFixed(1)} MB (${speedMb.toFixed(1)} MB/s)`;
+        const message = `Baixando Java... ${(received / 1024 / 1024).toFixed(
+          1,
+        )} / ${(total / 1024 / 1024).toFixed(1)} MB (${speedMb.toFixed(1)} MB/s)`;
         onProgress({ message, percent });
       }
       callback(null, chunk);
@@ -372,8 +371,9 @@ export async function ensureJavaRuntime(
   return { path: binaryPath, major, source: 'downloaded', runtimeDir: targetDir };
 }
 
-export function summarizeValidation(
-  result: JavaValidationResult,
-): { ok: boolean; major?: JavaMajor } {
+export function summarizeValidation(result: JavaValidationResult): {
+  ok: boolean;
+  major?: JavaMajor;
+} {
   return { ok: result.ok, major: parseJavaMajor(result.versionText) };
 }
