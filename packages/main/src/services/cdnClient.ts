@@ -415,6 +415,45 @@ function toResolvedVersionEntry(
   };
 }
 
+export interface VersioningEntry {
+  id?: string;
+  versionId?: string;
+  minecraftVersion?: string;
+  baseVersion?: string;
+  javaId?: string | number;
+  javaVersion?: string | number;
+  enabled?: boolean;
+  javaMajor?: string | number;
+  [key: string]: unknown;
+}
+
+export interface VersioningManifest {
+  schema?: string;
+  updatedAt?: string;
+  defaultVersionId?: string;
+  latest?: VersioningEntry;
+  versions?: VersioningEntry[] | Record<string, VersioningEntry>;
+}
+
+const DEFAULT_VERSIONING_PATH = '/data/meta/versioning.json';
+
+function getVersioningManifestUrl(): string {
+  const configured = distributionConfig.client.versioningManifestUrl?.trim();
+  if (configured) {
+    return configured;
+  }
+  return `${distributionConfig.client.cdnBaseUrl.replace(/\/+$/, '')}${DEFAULT_VERSIONING_PATH}`;
+}
+
+export async function loadVersioningManifest(): Promise<VersioningManifest | null> {
+  const url = getVersioningManifestUrl();
+  const payload = await requestJson(url);
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+  return payload as VersioningManifest;
+}
+
 export async function loadVersionCatalogFromCdn(): Promise<VersionCatalogPayload | null> {
   return resolveCatalogFromCandidates(distributionConfig.client.defaultVersionId);
 }

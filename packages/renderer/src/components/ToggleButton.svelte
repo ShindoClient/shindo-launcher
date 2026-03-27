@@ -15,7 +15,8 @@
   }
 </script>
 
-<style>
+<style lang="scss">
+  @use '../styles/variables' as v;
   .toggle {
     position: relative;
     display: inline-flex;

@@ -2,27 +2,26 @@ import {
   IpcChannel,
   IpcEvent,
   type JreStatusPayload,
-  type LaunchLogEntry,
   type LaunchLogLevel,
   type LauncherConfig,
 } from '@shindo/shared';
 import {
   BrowserWindow,
-  OpenDialogOptions,
   app,
-  dialog,
-  ipcMain,
   nativeImage,
   shell,
 } from 'electron';
-import fs from 'node:fs';
 import path from 'node:path';
-import { accountService } from './services/accountService';
-import { loadConfig, updateConfig } from './services/configService';
-import { ensureJre } from './services/jreManager';
 import { LauncherService } from './services/launcherService';
-import { runStartupUpdateSequence } from './services/updateOrchestrator';
-import { getSystemMemory } from './system/memory';
+import {
+  appendLaunchLog,
+  classifyLaunchLog,
+  clearLaunchLogBuffer,
+  getLaunchLogBuffer,
+  initLogFile,
+  logMessage,
+} from './services/logService';
+import { registerIpcHandlers } from './ipc/registerIpcHandlers';
 
 const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
 const ICON_MAP: Partial<Record<NodeJS.Platform, string>> = {
@@ -31,86 +30,6 @@ const ICON_MAP: Partial<Record<NodeJS.Platform, string>> = {
   darwin: 'logo.icns',
 };
 const DEFAULT_ICON_FILE = 'logo.png';
-
-type LogLevel = 'debug' | 'info' | 'error' | 'warn';
-
-let logFilePath: string | null = null;
-const pendingLogs: string[] = [];
-const launchLogBuffer: LaunchLogEntry[] = [];
-const LAUNCH_LOG_LIMIT = 500;
-
-function persistLog(line: string): void {
-  if (!logFilePath) {
-    pendingLogs.push(line);
-    return;
-  }
-  try {
-    fs.appendFileSync(logFilePath, line);
-  } catch {
-    pendingLogs.push(line);
-  }
-}
-
-function flushPendingLogs(): void {
-  if (!logFilePath || pendingLogs.length === 0) {
-    return;
-  }
-  try {
-    fs.appendFileSync(logFilePath, pendingLogs.join(''));
-    pendingLogs.length = 0;
-  } catch {
-    // keep pending
-  }
-}
-
-function logMessage(level: LogLevel, message: string): void {
-  const line = `[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}\n`;
-  persistLog(line);
-  if (level === 'error') {
-    console.error(message);
-  } else if (level === 'debug') {
-    console.debug(message);
-  } else if (level === 'warn') {
-    console.warn(message);
-  } else {
-    console.log(message);
-  }
-}
-
-function emitLaunchLog(level: LaunchLogLevel, message: string): void {
-  const entry: LaunchLogEntry = {
-    level,
-    message,
-    timestamp: Date.now(),
-  };
-  logMessage(level, message);
-  launchLogBuffer.push(entry);
-  if (launchLogBuffer.length > LAUNCH_LOG_LIMIT) {
-    launchLogBuffer.splice(0, launchLogBuffer.length - LAUNCH_LOG_LIMIT);
-  }
-  broadcast(IpcEvent.LaunchLog, entry);
-}
-
-function classifyLaunchLog(message: unknown, fallback: LaunchLogLevel = 'info'): LaunchLogLevel {
-  const text = String(message ?? '');
-  const normalized = text.toLowerCase();
-  if (
-    normalized.includes('error') ||
-    normalized.includes('exception') ||
-    normalized.includes('fatal') ||
-    normalized.includes('stack trace') ||
-    /\[error/.test(normalized)
-  ) {
-    return 'error';
-  }
-  if (normalized.includes('warn') || /\[warn/.test(normalized)) {
-    return 'warn';
-  }
-  if (normalized.includes('debug') || normalized.includes('trace') || /\[debug/.test(normalized)) {
-    return 'debug';
-  }
-  return fallback;
-}
 
 function resolveAssetPath(fileName: string): string {
   if (isDev) {
@@ -147,6 +66,29 @@ function broadcast(event: IpcEvent, payload: unknown): void {
 
 function broadcastJreStatus(payload: JreStatusPayload): void {
   broadcast(IpcEvent.JreStatus, payload);
+}
+
+function emitLaunchLog(level: LaunchLogLevel, message: string): void {
+  const entry = appendLaunchLog(level, message);
+  broadcast(IpcEvent.LaunchLog, entry);
+}
+
+function emitJavaUpdateProgress(message: string, percent: number): void {
+  broadcast(IpcEvent.UpdateProgress, {
+    step: 'jre-setup',
+    message,
+    percent: Math.max(0, Math.min(100, percent)),
+    phaseIndex: 1,
+    phaseTotal: 1,
+  });
+}
+
+function emitJavaUpdateCompleted(): void {
+  broadcast(IpcEvent.UpdateCompleted, { success: true });
+}
+
+function emitJavaUpdateError(message: string): void {
+  broadcast(IpcEvent.UpdateError, { success: false, message });
 }
 
 async function createWindow(): Promise<void> {
@@ -330,14 +272,7 @@ async function createLogWindow(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
-  try {
-    logFilePath = path.join(app.getPath('userData'), 'launcher.log');
-    fs.mkdirSync(path.dirname(logFilePath), { recursive: true });
-    fs.writeFileSync(logFilePath, '', { flag: 'a' });
-    flushPendingLogs();
-  } catch (error) {
-    console.error('Failed to initialise log file', error);
-  }
+  initLogFile(app.getPath('userData'));
 
   await createWindow();
 
@@ -354,152 +289,15 @@ app.on('window-all-closed', () => {
   }
 });
 
-ipcMain.handle(IpcChannel.Ping, async () => ({ success: true }));
-
-ipcMain.handle(IpcChannel.EnsureClient, (_event, options) =>
-  launcherService.ensureClientUpToDate(options),
-);
-
-ipcMain.handle(IpcChannel.ClientState, async () => launcherService.getClientState());
-
-ipcMain.handle(IpcChannel.VersionCatalog, async () => launcherService.getVersionCatalog());
-
-ipcMain.handle(IpcChannel.LauncherCheckUpdate, () => launcherService.checkLauncherUpdate());
-
-ipcMain.handle(IpcChannel.LauncherDownloadUpdate, () => launcherService.downloadLauncherUpdate());
-
-ipcMain.handle(IpcChannel.ConfigGet, () => loadConfig());
-
-ipcMain.handle(IpcChannel.ConfigSet, async (_event, patch) => {
-  const incomingPatch: Partial<LauncherConfig> = { ...(patch ?? {}) };
-  const previous = loadConfig();
-
-  // Clear stale JRE path when switching back to system
-  if (incomingPatch.jrePreference === 'system') {
-    incomingPatch.jrePath = undefined;
-  }
-
-  let next = updateConfig(incomingPatch);
-
-  const shouldReconcileRuntime =
-    Object.prototype.hasOwnProperty.call(incomingPatch, 'jrePreference') ||
-    Object.prototype.hasOwnProperty.call(incomingPatch, 'jrePath');
-
-  if (shouldReconcileRuntime) {
-    const result = await ensureJre(next);
-    logMessage('info', result.message);
-    broadcastJreStatus({
-      message: result.message,
-      severity: result.patch ? 'warning' : 'info',
-      source: 'config',
-    });
-    if (result.patch) {
-      next = updateConfig(result.patch);
-    }
-  }
-
-  return next;
-});
-
-ipcMain.handle(IpcChannel.JavaChoosePath, async (event, options) => {
-  const parent = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
-  const dialogOptions: OpenDialogOptions = {
-    title: 'Select Java executable',
-    buttonLabel: 'Choose Java',
-    defaultPath: options?.defaultPath,
-    properties: ['openFile'] as const,
-  };
-  const { canceled, filePaths } = parent
-    ? await dialog.showOpenDialog(parent, dialogOptions)
-    : await dialog.showOpenDialog(dialogOptions);
-  if (canceled || filePaths.length === 0) {
-    return null;
-  }
-  return filePaths[0];
-});
-
-ipcMain.handle(IpcChannel.SystemMemory, () => getSystemMemory());
-
-ipcMain.handle(IpcChannel.AccountsList, () => accountService.getPublicState());
-
-ipcMain.handle(IpcChannel.AccountsAddOffline, (_event, payload) =>
-  accountService.addOfflineAccount(payload),
-);
-
-ipcMain.handle(IpcChannel.AccountsAddMicrosoft, () => accountService.addMicrosoftAccount());
-
-ipcMain.handle(IpcChannel.AccountsRemove, (_event, payload) =>
-  accountService.removeAccount(payload),
-);
-
-ipcMain.handle(IpcChannel.AccountsSelect, (_event, payload) =>
-  accountService.selectAccount(payload),
-);
-
-ipcMain.handle(IpcChannel.RunStartupUpdate, async () => {
-  await runStartupUpdateSequence(launcherService);
-});
-
-ipcMain.handle(IpcChannel.AppVersion, () => app.getVersion());
-
-ipcMain.handle(IpcChannel.WindowMinimize, (event) => {
-  const target = BrowserWindow.fromWebContents(event.sender);
-  target?.minimize();
-});
-
-ipcMain.handle(IpcChannel.WindowClose, (event) => {
-  const target = BrowserWindow.fromWebContents(event.sender);
-  target?.close();
-});
-
-ipcMain.handle(IpcChannel.LogWindowOpen, async () => {
-  await createLogWindow();
-});
-
-ipcMain.handle(IpcChannel.LogWindowClose, () => {
-  logWindow?.close();
-});
-
-ipcMain.handle(IpcChannel.LaunchLogHistory, () => [...launchLogBuffer]);
-
-ipcMain.handle(IpcChannel.LaunchLogClear, () => {
-  launchLogBuffer.length = 0;
-});
-
-ipcMain.handle(IpcChannel.LaunchStart, (_event, options) => {
-  console.log('[MAIN] LaunchStart called with options:', options);
-  emitLaunchLog('info', 'Iniciando ShindoClient...');
-  return launcherService
-    .launchClient(options, {
-      onLog: (message) => emitLaunchLog(classifyLaunchLog(message, 'info'), message),
-      onError: (message) => emitLaunchLog(classifyLaunchLog(message, 'error'), message),
-      onClose: (code) => {
-        const exitMessage = `Processo finalizado com codigo ${code ?? 'desconhecido'}`;
-        emitLaunchLog('info', exitMessage);
-        broadcast(IpcEvent.LaunchExit, { code });
-      },
-    })
-    .then((result) => {
-      const summary = result.pid ? `Cliente iniciado (pid ${result.pid}).` : 'Cliente iniciado.';
-      emitLaunchLog('info', summary);
-      console.log('[MAIN] launchClient succeeded:', result);
-      return result;
-    })
-    .catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error('[MAIN] launchClient failed:', error);
-      emitLaunchLog('error', message);
-      throw error;
-    });
-});
-
-ipcMain.handle(IpcChannel.LaunchStop, async () => {
-  const stopped = await launcherService.stopClient();
-  emitLaunchLog(
-    'info',
-    stopped
-      ? 'Solicitacao de encerramento do cliente enviada.'
-      : 'Nenhum cliente em execucao para encerrar.',
-  );
-  return stopped;
+registerIpcHandlers({
+  launcherService,
+  getMainWindow: () => mainWindow,
+  emitLaunchLog,
+  classifyLaunchLog,
+  emitJavaUpdateProgress,
+  emitJavaUpdateCompleted,
+  emitJavaUpdateError,
+  createLogWindow,
+  getLaunchLogBuffer,
+  clearLaunchLogBuffer,
 });

@@ -16,7 +16,8 @@
   }
 </script>
 
-<style>
+<style lang="scss">
+  @use '../styles/variables' as v;
   .navigation-bar {
     display: flex;
     justify-content: center;

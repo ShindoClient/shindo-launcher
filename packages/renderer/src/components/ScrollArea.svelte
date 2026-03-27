@@ -107,7 +107,8 @@
   });
 </script>
 
-<style>
+<style lang="scss">
+  @use '../styles/variables' as v;
   .scroll-area {
     position: relative;
     display: flex;

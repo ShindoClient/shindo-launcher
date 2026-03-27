@@ -30,13 +30,15 @@
   </div>
 </div>
 
-<style>
+<style lang="scss">
+  @use './styles/variables' as v;
+
   .launcher-shell {
     display: flex;
     flex-direction: column;
     height: 100vh;
     width: 100vw;
-    background: #000;
+    background: v.$color-bg-app;
     border-radius: 3px;
     overflow: hidden;
   }

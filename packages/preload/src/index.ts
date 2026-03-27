@@ -22,6 +22,7 @@ import type {
   LaunchLogEntry,
   JreStatusPayload,
   JavaChooserOptions,
+  JavaValidationResult,
 } from '@shindo/shared';
 
 type EventPayload<T extends IpcEvent> = T extends IpcEvent.UpdateProgress
@@ -65,6 +66,8 @@ const bridge: LauncherBridge = {
   getVersion: () => ipcRenderer.invoke(IpcChannel.AppVersion) as Promise<string>,
   chooseJavaExecutable: (options?: JavaChooserOptions) =>
     ipcRenderer.invoke(IpcChannel.JavaChoosePath, options) as Promise<string | null>,
+  validateJavaExecutable: (filePath: string) =>
+    ipcRenderer.invoke(IpcChannel.JavaValidatePath, filePath) as Promise<JavaValidationResult>,
   getLaunchLogs: () => ipcRenderer.invoke(IpcChannel.LaunchLogHistory) as Promise<LaunchLogEntry[]>,
   clearLaunchLogs: () => ipcRenderer.invoke(IpcChannel.LaunchLogClear) as Promise<void>,
   getVersionCatalog: () =>

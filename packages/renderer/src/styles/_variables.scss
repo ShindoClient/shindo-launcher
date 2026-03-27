@@ -1,0 +1,45 @@
+$font-primary: 'Nunito', 'Poppins', sans-serif;
+
+$color-bg-app: #000000;
+$color-text: #ffffff;
+$color-muted: #9ca3af;
+$color-accent: #3b82f6;
+$color-accent-strong: #2563eb;
+$color-muted-strong: #94a3b8;
+$color-border-soft: rgba(255, 255, 255, 0.1);
+$color-border-strong: rgba(59, 130, 246, 0.3);
+$color-surface-weak: rgba(255, 255, 255, 0.05);
+$color-surface-strong: rgba(59, 130, 246, 0.08);
+
+$radius-sm: 8px;
+$radius-md: 12px;
+$radius-lg: 16px;
+$radius-xl: 20px;
+
+$duration-fast: 160ms;
+$duration-normal: 220ms;
+$timing-default: ease;
+
+$shadow-sm: 0 4px 20px rgba(0, 0, 0, 0.3);
+$shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.4);
+
+$focus-ring: 0 0 0 2px rgba(59, 130, 246, 0.6);
+
+:root {
+  --font-primary: #{$font-primary};
+  --color-bg-app: #{$color-bg-app};
+  --color-text: #{$color-text};
+  --color-muted: #{$color-muted};
+  --color-accent: #{$color-accent};
+  --color-accent-strong: #{$color-accent-strong};
+  --radius-sm: #{$radius-sm};
+  --radius-md: #{$radius-md};
+  --radius-lg: #{$radius-lg};
+  --radius-xl: #{$radius-xl};
+  --duration-fast: #{$duration-fast};
+  --duration-normal: #{$duration-normal};
+  --timing-default: #{$timing-default};
+  --shadow-sm: #{$shadow-sm};
+  --shadow-lg: #{$shadow-lg};
+  --focus-ring: #{$focus-ring};
+}

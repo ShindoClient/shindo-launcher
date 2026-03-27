@@ -7,6 +7,7 @@ export interface DistributionConfig {
     githubRepoMap: Record<string, string>;
     defaultVersionAssetName: string;
     defaultPackageAssetName: string;
+    versioningManifestUrl: string;
   };
   java: {
     metadataUrl: string;
@@ -29,6 +30,12 @@ const DEFAULT_LAUNCHER_GITHUB_REPO = 'ShindoClient/shindo-launcher';
 const DEFAULT_JAVA_METADATA_URL = 'https://cdn.shindoclient.com/data/meta/java.json';
 const DEFAULT_VERSION_ASSET_NAME = 'version.txt';
 const DEFAULT_PACKAGE_ASSET_NAME = 'ShindoClient.zip';
+const DEFAULT_VERSIONING_PATH = '/data/meta/versioning.json';
+
+const NORMALIZED_CDN_BASE_URL = normalizeBaseUrl(
+  process.env.SHINDO_CDN_BASE_URL,
+  DEFAULT_CDN_BASE_URL,
+);
 
 function normalizeBaseUrl(value: string | undefined, fallback: string): string {
   const normalized = (value ?? fallback).trim();
@@ -64,7 +71,7 @@ export const distributionConfig: DistributionConfig = Object.freeze({
   client: {
     defaultVersionId:
       process.env.SHINDO_CLIENT_DEFAULT_VERSION_ID?.trim() || DEFAULT_CLIENT_VERSION_ID,
-    cdnBaseUrl: normalizeBaseUrl(process.env.SHINDO_CDN_BASE_URL, DEFAULT_CDN_BASE_URL),
+    cdnBaseUrl: NORMALIZED_CDN_BASE_URL,
     cdnManifestCandidates: parseList(
       process.env.SHINDO_CDN_MANIFESTS,
       DEFAULT_CDN_MANIFEST_CANDIDATES,
@@ -75,6 +82,9 @@ export const distributionConfig: DistributionConfig = Object.freeze({
       process.env.SHINDO_CLIENT_VERSION_ASSET?.trim() || DEFAULT_VERSION_ASSET_NAME,
     defaultPackageAssetName:
       process.env.SHINDO_CLIENT_PACKAGE_ASSET?.trim() || DEFAULT_PACKAGE_ASSET_NAME,
+    versioningManifestUrl:
+      process.env.SHINDO_VERSIONING_MANIFEST_URL?.trim() ||
+      `${NORMALIZED_CDN_BASE_URL}${DEFAULT_VERSIONING_PATH}`,
   },
   java: {
     metadataUrl: process.env.SHINDO_JAVA_META_URL?.trim() || DEFAULT_JAVA_METADATA_URL,

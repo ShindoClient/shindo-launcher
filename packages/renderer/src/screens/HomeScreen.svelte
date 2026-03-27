@@ -230,8 +230,8 @@
 
   $: launchButtonLabel = (() => {
     if (clientRunning) return stopLabel;
-    if (launching) return language === 'pt' ? 'INICIANDO...' : 'LAUNCHING...';
     if (isUpdating) return updateLabel;
+    if (launching) return language === 'pt' ? 'INICIANDO...' : 'LAUNCHING...';
     if (noAccountSelected) return language === 'pt' ? 'SELECIONE UMA CONTA' : 'SELECT AN ACCOUNT';
     return readyLabel;
   })();
@@ -259,7 +259,8 @@
   }
 </script>
 
-<style>
+<style lang="scss">
+  @use '../styles/variables' as v;
   .home-container {
     width: 100%;
     height: 100%;
@@ -938,14 +939,6 @@
     }
   }
 
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
 </style>
 
 <div class="home-container">

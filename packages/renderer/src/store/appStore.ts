@@ -1,25 +1,22 @@
 import { writable, get } from 'svelte/store';
 import type { Language } from '../i18n';
 import { setLanguage, t } from '../i18n';
-import { enqueueNotification } from './notificationStore';
+import { createUpdateHandlers } from './updateHandlers';
+import { createAccountHandlers } from './accountHandlers';
 import type {
   ClientStatePayload,
   LauncherConfig,
   SystemMemoryInfo,
-  UpdateCompletionPayload,
-  UpdateErrorPayload,
   UpdateProgressPayload,
-  LaunchExitPayload,
-  AccountsStatePayload,
   AccountProfile,
   VersionCatalogPayload,
 } from '@shindo/shared';
 
-type Screen = 'update' | 'home' | 'settings';
+export type Screen = 'update' | 'home' | 'settings';
 
-type UpdateStatus = 'idle' | 'running' | 'completed' | 'error';
+export type UpdateStatus = 'idle' | 'running' | 'completed' | 'error';
 
-interface UpdateState {
+export interface UpdateState {
   status: UpdateStatus;
   step: UpdateProgressPayload['step'] | null;
   message: string;
@@ -29,7 +26,7 @@ interface UpdateState {
   errorMessage?: string;
 }
 
-interface AppState {
+export interface AppState {
   screen: Screen;
   update: UpdateState;
   config: LauncherConfig | null;
@@ -82,212 +79,12 @@ const initialState: AppState = {
   versionCatalog: null,
   versionCatalogLoading: false,
 };
-function applyAccountsPayload(state: AppState, payload: AccountsStatePayload): AppState {
-  return {
-    ...state,
-    accounts: {
-      ...state.accounts,
-      entries: payload.accounts,
-      activeAccountId: payload.activeAccountId,
-      limit: payload.limit,
-      loading: false,
-      loginInProgress: false,
-      error: undefined,
-    },
-  };
-}
-
-async function refreshAccounts(): Promise<void> {
-  store.update((state) => ({
-    ...state,
-    accounts: {
-      ...state.accounts,
-      loading: true,
-      error: undefined,
-    },
-  }));
-
-  try {
-    const payload = await window.shindo.getAccounts();
-    store.update((state) => applyAccountsPayload(state, payload));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    store.update((state) => ({
-      ...state,
-      accounts: {
-        ...state.accounts,
-        loading: false,
-        error: message,
-      },
-    }));
-    throw error;
-  }
-}
-
-async function addOfflineAccount(username: string): Promise<void> {
-  store.update((state) => ({
-    ...state,
-    accounts: {
-      ...state.accounts,
-      loading: true,
-      error: undefined,
-    },
-  }));
-
-  try {
-    const payload = await window.shindo.addOfflineAccount({ username });
-    store.update((state) => applyAccountsPayload(state, payload));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    store.update((state) => ({
-      ...state,
-      accounts: {
-        ...state.accounts,
-        loading: false,
-        error: message,
-      },
-    }));
-    throw error;
-  }
-}
-
-async function addMicrosoftAccount(): Promise<void> {
-  store.update((state) => ({
-    ...state,
-    accounts: {
-      ...state.accounts,
-      loginInProgress: true,
-      error: undefined,
-    },
-  }));
-
-  try {
-    const payload = await window.shindo.addMicrosoftAccount();
-    store.update((state) => applyAccountsPayload(state, payload));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    store.update((state) => ({
-      ...state,
-      accounts: {
-        ...state.accounts,
-        loginInProgress: false,
-        error: message,
-      },
-    }));
-    throw error;
-  }
-}
-
-async function removeAccount(accountId: string): Promise<void> {
-  store.update((state) => ({
-    ...state,
-    accounts: {
-      ...state.accounts,
-      loading: true,
-      error: undefined,
-    },
-  }));
-
-  try {
-    const payload = await window.shindo.removeAccount({ accountId });
-    store.update((state) => applyAccountsPayload(state, payload));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    store.update((state) => ({
-      ...state,
-      accounts: {
-        ...state.accounts,
-        loading: false,
-        error: message,
-      },
-    }));
-    throw error;
-  }
-}
-
-async function selectAccount(accountId: string): Promise<void> {
-  store.update((state) => ({
-    ...state,
-    accounts: {
-      ...state.accounts,
-      loading: true,
-      error: undefined,
-    },
-  }));
-
-  try {
-    const payload = await window.shindo.selectAccount({ accountId });
-    store.update((state) => applyAccountsPayload(state, payload));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    store.update((state) => ({
-      ...state,
-      accounts: {
-        ...state.accounts,
-        loading: false,
-        error: message,
-      },
-    }));
-    throw error;
-  }
-}
-
 const store = writable<AppState>(initialState);
-
-let listenersRegistered = false;
-const unsubscribers: Array<() => void> = [];
 
 console.log('[renderer] bridge available:', typeof window.shindo !== 'undefined');
 
 function translate(key: string, params?: Record<string, string | number>): string {
   return get(t)(key, params);
-}
-
-function localizeUpdateMessage(
-  message: string,
-  step: UpdateProgressPayload['step'] | null,
-): string {
-  const lower = (message || '').toLowerCase();
-  if (step === 'launcher-update') {
-    if (lower.includes('baixando') || lower.includes('download'))
-      return translate('home.progress.launcherDownloading');
-    if (lower.includes('aplicando') || lower.includes('apply'))
-      return translate('home.progress.launcherApplying');
-    if (lower.includes('preparada') || lower.includes('ready'))
-      return translate('home.progress.launcherReady');
-    if (lower.includes('atualizado') || lower.includes('up to date'))
-      return translate('home.progress.launcherUpToDate');
-    return translate('home.progress.launcher');
-  }
-  if (step === 'jre-setup') {
-    if (lower.includes('verificado') || lower.includes('ready'))
-      return translate('home.progress.jreReady');
-    return translate('home.progress.jreChecking');
-  }
-  if (step === 'client-update') {
-    if (lower.includes('pronto') || lower.includes('ready') || lower.includes('sincronizado')) {
-      return translate('home.progress.clientReady');
-    }
-    return translate('home.progress.clientSync');
-  }
-  return message;
-}
-
-function registerListeners(): void {
-  if (listenersRegistered) return;
-  listenersRegistered = true;
-
-  unsubscribers.push(window.shindo.onUpdateProgress((payload) => handleUpdateProgress(payload)));
-  unsubscribers.push(window.shindo.onUpdateCompleted((payload) => handleUpdateCompleted(payload)));
-  unsubscribers.push(window.shindo.onUpdateError((payload) => handleUpdateError(payload)));
-  unsubscribers.push(window.shindo.onLaunchExit((payload) => appendExitLog(payload)));
-  unsubscribers.push(
-    window.shindo.onJreStatus((payload) => {
-      enqueueNotification({ message: payload.message, severity: payload.severity });
-    }),
-  );
-
-  store.update((state) => ({ ...state, listenersRegistered: true }));
 }
 
 async function refreshClientState(): Promise<void> {
@@ -314,96 +111,21 @@ async function refreshVersionCatalog(): Promise<void> {
   }
 }
 
-function handleUpdateProgress(payload: UpdateProgressPayload): void {
-  const localizedMessage = localizeUpdateMessage(payload.message, payload.step);
-  store.update((state) => ({
-    ...state,
-    update: {
-      status: 'running',
-      step: payload.step,
-      message: localizedMessage,
-      percent: Math.min(100, Math.max(0, payload.percent)),
-      phaseIndex: Math.max(0, payload.phaseIndex),
-      phaseTotal: Math.max(0, payload.phaseTotal),
-      errorMessage: undefined,
-    },
-    launcherStatus: localizedMessage,
-  }));
-}
+const {
+  refreshAccounts,
+  addOfflineAccount,
+  addMicrosoftAccount,
+  removeAccount,
+  selectAccount,
+} = createAccountHandlers({ store });
 
-function handleUpdateCompleted(_payload: UpdateCompletionPayload): void {
-  store.update((state) => ({
-    ...state,
-    update: {
-      ...state.update,
-      status: 'completed',
-      percent: 100,
-      message: state.update.message || translate('home.status.updateComplete'),
-      phaseIndex: state.update.phaseTotal || state.update.phaseIndex || 0,
-      errorMessage: undefined,
-    },
-    launcherStatus: translate('home.status.updateComplete'),
-    screen: 'home',
-  }));
-  void refreshClientState();
-}
-
-function handleUpdateError(payload: UpdateErrorPayload): void {
-  const message = translate('home.status.updateError', { message: payload.message });
-  store.update((state) => ({
-    ...state,
-    update: {
-      status: 'error',
-      step: null,
-      message,
-      percent: 0,
-      phaseIndex: 0,
-      phaseTotal: 0,
-      errorMessage: payload.message,
-    },
-    launcherStatus: message,
-  }));
-}
-
-function appendExitLog(payload: LaunchExitPayload): void {
-  const exitMessage =
-    payload.code === null || payload.code === undefined
-      ? translate('home.status.exitUnknown')
-      : translate('home.status.exit', { code: payload.code });
-  store.update((state) => ({
-    ...state,
-    clientRunning: false,
-    launcherStatus: exitMessage,
-  }));
-}
-
-async function startUpdate(): Promise<void> {
-  if (get(store).updateInFlight) return;
-
-  store.update((state) => ({
-    ...state,
-    updateInFlight: true,
-    update: {
-      status: 'running',
-      step: null,
-      message: translate('home.status.checking'),
-      percent: 0,
-      phaseIndex: 0,
-      phaseTotal: 0,
-      errorMessage: undefined,
-    },
-    launcherStatus: translate('home.status.checking'),
-  }));
-
-  try {
-    await window.shindo.runStartupUpdate();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    handleUpdateError({ success: false, message });
-  } finally {
-    store.update((state) => ({ ...state, updateInFlight: false }));
-  }
-}
+const {
+  registerListeners,
+  handleUpdateProgress,
+  handleUpdateCompleted,
+  handleUpdateError,
+  startUpdate,
+} = createUpdateHandlers({ store, translate, refreshClientState });
 
 async function applyConfigPatch(patch: Partial<LauncherConfig>): Promise<void> {
   const currentState = get(store);

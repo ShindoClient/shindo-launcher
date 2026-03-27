@@ -1,8 +1,10 @@
+@use './variables';
+@use './mixins';
+@use './animations';
+@use './reset';
+
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap');
-
-@import './styles/tokens.css';
-@import './styles/base.css';
 
 @tailwind base;
 @tailwind components;

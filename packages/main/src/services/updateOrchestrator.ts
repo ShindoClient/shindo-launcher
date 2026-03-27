@@ -7,8 +7,7 @@ import {
   type LauncherUpdateResultPayload,
 } from '@shindo/shared';
 import type { LauncherService } from './launcherService';
-import { loadConfig, updateConfig } from './configService';
-import { ensureJre, type EnsureJreResult } from './jreManager';
+import { loadConfig } from './configService';
 import { onLauncherDownloadProgress } from './launcherUpdater';
 
 let isRunning = false;
@@ -43,7 +42,6 @@ export async function runStartupUpdateSequence(service: LauncherService): Promis
 
   try {
     const launcherInfo: LauncherUpdateInfoPayload = await service.checkLauncherUpdate();
-    let jreResult: EnsureJreResult | null = null;
     let clientState: ClientUpdatePayload | null = null;
     let launcherDownloadResult: LauncherUpdateResultPayload | null = null;
 
@@ -95,32 +93,6 @@ export async function runStartupUpdateSequence(service: LauncherService): Promis
         percent: 100,
       });
     }
-
-    phases.push({
-      step: 'jre-setup',
-      message: 'Verificando runtime Java...',
-      percent: 10,
-      action: async () => {
-        const config = loadConfig();
-        jreResult = await ensureJre(config);
-        if (jreResult.patch) {
-          updateConfig(jreResult.patch);
-        }
-        if (jreResult) {
-          emit(IpcEvent.JreStatus, {
-            message: jreResult.message,
-            severity: jreResult.patch ? 'warning' : 'info',
-            source: 'update',
-          });
-        }
-      },
-    });
-
-    phases.push({
-      step: 'jre-setup',
-      message: () => jreResult?.message ?? 'Runtime verificado.',
-      percent: 100,
-    });
 
     phases.push({
       step: 'client-update',

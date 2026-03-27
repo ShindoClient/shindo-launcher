@@ -1,11 +1,13 @@
+@use './variables' as v;
+
 @layer base {
   * {
     font-family: var(--font-primary);
     transition:
-      background-color var(--duration-normal) var(--timing-default),
-      border-color var(--duration-fast) var(--timing-default),
-      color var(--duration-fast) var(--timing-default),
-      transform var(--duration-fast) var(--timing-default);
+      background-color v.$duration-normal v.$timing-default,
+      border-color v.$duration-fast v.$timing-default,
+      color v.$duration-fast v.$timing-default,
+      transform v.$duration-fast v.$timing-default;
   }
 
   html,
@@ -81,7 +83,7 @@
   .glass-dark {
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid v.$color-border-soft;
   }
 
   .glass-light {
@@ -120,22 +122,22 @@
 
 @layer utilities {
   .rounded-bubble {
-    border-radius: var(--radius-md);
+    border-radius: v.$radius-md;
   }
 
   .rounded-bubble-lg {
-    border-radius: var(--radius-lg);
+    border-radius: v.$radius-lg;
   }
 
   .rounded-bubble-xl {
-    border-radius: var(--radius-xl);
+    border-radius: v.$radius-xl;
   }
 
   .shadow-bubble {
-    box-shadow: var(--shadow-sm);
+    box-shadow: v.$shadow-sm;
   }
 
   .shadow-bubble-lg {
-    box-shadow: var(--shadow-lg);
+    box-shadow: v.$shadow-lg;
   }
 }

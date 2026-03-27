@@ -24,6 +24,7 @@ export const enum IpcChannel {
   LaunchLogClear = 'shindo:launch.log-clear',
   VersionCatalog = 'shindo:catalog.versions',
   JavaChoosePath = 'shindo:java.choose-path',
+  JavaValidatePath = 'shindo:java.validate-path',
 }
 
 export const enum IpcEvent {
@@ -36,6 +37,8 @@ export const enum IpcEvent {
 }
 
 export type LaunchLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export type JavaMajor = 8 | 11 | 16 | 17 | 21;
 
 export interface LaunchLogEntry {
   level: LaunchLogLevel;
@@ -53,6 +56,15 @@ export interface JreStatusPayload {
 
 export interface JavaChooserOptions {
   defaultPath?: string;
+}
+
+export type JavaSource = 'auto' | 'custom';
+
+export interface JavaValidationResult {
+  ok: boolean;
+  path: string;
+  versionText?: string;
+  error?: string;
 }
 
 export interface ReleaseAssetInfo {
@@ -180,6 +192,7 @@ export interface LauncherBridge {
   removeAccount(payload: AccountSelectionPayload): Promise<AccountsStatePayload>;
   selectAccount(payload: AccountSelectionPayload): Promise<AccountsStatePayload>;
   chooseJavaExecutable(options?: JavaChooserOptions): Promise<string | null>;
+  validateJavaExecutable(path: string): Promise<JavaValidationResult>;
   onUpdateProgress(callback: (event: UpdateProgressPayload) => void): () => void;
   onUpdateCompleted(callback: (payload: UpdateCompletionPayload) => void): () => void;
   onUpdateError(callback: (payload: UpdateErrorPayload) => void): () => void;
@@ -190,10 +203,10 @@ export interface LauncherBridge {
 
 export interface LauncherConfig {
   ramGB: number;
-  jrePreference: 'zulu' | 'temurin' | 'liberica' | 'system';
-  javaVersion: 8 | 11 | 17 | 21;
-  javaPackage: 'jre' | 'jdk' | 'jdk-full';
-  jrePath?: string;
+  javaSource: JavaSource;
+  javaPath?: string | null;
+  javaCustomPath?: string | null;
+  javaRuntimeMajor?: JavaMajor;
   jvmArgs: string;
   versionId: string;
   selectedBuild?: number | null;

@@ -86,7 +86,8 @@
   });
 </script>
 
-<style>
+<style lang="scss">
+  @use '../styles/variables' as v;
   header {
     -webkit-user-select: none;
     user-select: none;

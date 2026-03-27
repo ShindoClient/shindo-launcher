@@ -1,5 +1,5 @@
 import LogWindow from './windows/LogWindow.svelte';
-import './index.css';
+import './index.scss';
 
 const target = document.getElementById('app');
 

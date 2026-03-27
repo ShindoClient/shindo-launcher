@@ -20,7 +20,8 @@
   }
 </script>
 
-<style>
+<style lang="scss">
+  @use '../styles/variables' as v;
   .sidebar {
     width: 80px;
     background: #000000;

@@ -28,7 +28,9 @@
   {/each}
 </div>
 
-<style>
+<style lang="scss">
+  @use '../styles/variables' as v;
+
   .notification-center {
     position: fixed;
     top: 1rem;
@@ -72,16 +74,5 @@
     line-height: 1;
     cursor: pointer;
     padding: 0;
-  }
-
-  @keyframes slideUp {
-    from {
-      transform: translateY(12px);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
   }
 </style>

@@ -1,21 +1,12 @@
 <script lang="ts">
   import ChevronLeft from 'lucide-svelte/icons/chevron-left';
   import Save from 'lucide-svelte/icons/save';
-  import type { LauncherConfig } from '@shindo/shared';
+  import type { JavaValidationResult, LauncherConfig } from '@shindo/shared';
   import ScrollArea from '../components/ScrollArea.svelte';
   import { appStore } from '../store/appStore';
   import { availableLanguages, t } from '../i18n';
   import { get } from 'svelte/store';
   import type { Language } from '../i18n';
-
-  type JavaStatusTone = 'info' | 'warning';
-  type JavaStatusInfo = {
-    title: string;
-    detail: string;
-    tone: JavaStatusTone;
-  };
-
-  const supportedVersions = ['8', '11', '17', '21'];
 
   const { applyConfigPatch, setScreen } = appStore;
 
@@ -25,77 +16,56 @@
   let ramValue = config?.ramGB ?? 4;
   let jvmArgsDraft = config?.jvmArgs ?? '';
   let language: Language = config?.language ?? 'en';
-  let jrePreference: LauncherConfig['jrePreference'] = config?.jrePreference ?? 'system';
-  let javaVersion = config?.javaVersion ?? 8;
-  let javaPackage: LauncherConfig['javaPackage'] = config?.javaPackage ?? 'jre';
   let savingJvmArgs = false;
-  let javaPathDraft = config?.jrePath ?? '';
-  let manualPathDirty = false;
-  let savingJavaPath = false;
+
+  let customPathDraft = config?.javaCustomPath ?? '';
+  let validationResult: JavaValidationResult | null = null;
+  let validationError: string | null = null;
+  let validating = false;
+  let experimentalOpen = false;
 
   $: if (config) {
     ramValue = config.ramGB;
     language = (config.language as Language) ?? 'en';
-    jrePreference = config.jrePreference ?? 'system';
-    javaVersion = config.javaVersion ?? 8;
-    javaPackage = config.javaPackage ?? 'jre';
     if (!savingJvmArgs) {
       jvmArgsDraft = config.jvmArgs ?? '';
     }
-    if (!manualPathDirty) {
-      javaPathDraft = config.jrePath ?? '';
+    if (!validating && !validationResult) {
+      customPathDraft = config.javaCustomPath ?? '';
     }
   }
 
-  const translate = (key: string, params?: Record<string, string | number>) => {
-    return get(t)(key, params);
-  };
+  const translate = (key: string, params?: Record<string, string | number>) => get(t)(key, params);
 
-  function buildJavaStatus(conf: LauncherConfig | null): JavaStatusInfo {
-    if (!conf) {
-      return {
-        title: translate('settings.runtimeCurrent'),
-        detail: translate('settings.loading'),
-        tone: 'info',
-      };
-    }
-    if (conf.jrePreference !== 'system' && !conf.jrePath) {
-      return {
-        title: `${conf.jrePreference.toUpperCase()} · Java ${conf.javaVersion}`,
-        detail: translate('settings.runtimeStatusPreparing'),
-        tone: 'warning',
-      };
-    }
-    if (!conf.jrePath) {
-      return {
-        title: translate('settings.runtimeCurrent'),
-        detail: translate('settings.runtimeStatusSystem'),
-        tone: 'warning',
-      };
-    }
-    return {
-      title: `${translate('settings.runtimeCurrent')} · Java ${conf.javaVersion}`,
-      detail: translate('settings.runtimeStatusReady', { path: conf.jrePath }),
-      tone: 'info',
-    };
+  $: javaPath = config?.javaPath ?? null;
+  $: javaMajor = config?.javaRuntimeMajor ?? null;
+  $: javaSource = config?.javaSource ?? 'auto';
+
+  $: javaCardTitle =
+    javaSource === 'custom' && javaPath
+      ? translate('settings.javaCustomTitle')
+      : translate('settings.javaAutoTitle');
+
+  $: javaCardDetail =
+    javaSource === 'custom' && javaPath
+      ? translate('settings.javaCustomDetail', { path: javaPath })
+      : javaPath
+        ? translate('settings.javaAutoDetailReady', {
+            version: javaMajor ?? '?',
+            path: javaPath,
+          })
+        : translate('settings.javaAutoDetailPending');
+
+  function parseMajor(versionText?: string | null): number | null {
+    if (!versionText) return null;
+    const match = versionText.match(/version\s+"?(\d+)(?:\.(\d+))?/i);
+    if (!match) return null;
+    const primary = Number(match[1]);
+    const secondary = Number(match[2]);
+    if (Number.isFinite(primary) && primary > 1) return primary;
+    if (Number.isFinite(secondary)) return secondary;
+    return null;
   }
-
-  $: packageListText =
-    jrePreference === 'system'
-      ? translate('settings.runtimeAvailabilitySystemPackage')
-      : translate('settings.runtimeAvailabilityPackages', { list: 'JRE, JDK, JDK Full (when available)' });
-
-  $: availabilityNote =
-    jrePreference === 'system'
-      ? translate('settings.runtimeAvailabilitySystemNote')
-      : translate('settings.runtimeAvailabilityNote', { provider: jrePreference });
-
-  $: javaStatus = buildJavaStatus(config);
-
-  const statusToneClasses: Record<JavaStatusTone, string> = {
-    info: 'border-blue-500/30 bg-blue-500/10 text-blue-100',
-    warning: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
-  } as const;
 
   function handleRamInput(event: Event) {
     const value = Number((event.target as HTMLInputElement).value);
@@ -106,36 +76,6 @@
     ramValue = value;
     try {
       await applyConfigPatch({ ramGB: value });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function handleJreChange(event: Event) {
-    const value = (event.target as HTMLSelectElement).value as LauncherConfig['jrePreference'];
-    jrePreference = value;
-    try {
-      await applyConfigPatch({ jrePreference: value });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function handleJavaVersionChange(event: Event) {
-    const value = Number((event.target as HTMLSelectElement).value) as LauncherConfig['javaVersion'];
-    javaVersion = value;
-    try {
-      await applyConfigPatch({ javaVersion: value });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function handleJavaPackageChange(event: Event) {
-    const value = (event.target as HTMLSelectElement).value as LauncherConfig['javaPackage'];
-    javaPackage = value;
-    try {
-      await applyConfigPatch({ javaPackage: value });
     } catch (error) {
       console.error(error);
     }
@@ -161,40 +101,71 @@
     }
   }
 
-  function handleJavaPathInput(event: Event) {
-    javaPathDraft = (event.target as HTMLInputElement).value;
-    manualPathDirty = true;
+  function handleCustomPathInput(event: Event) {
+    customPathDraft = (event.target as HTMLInputElement).value;
+    validationResult = null;
+    validationError = null;
   }
 
   async function handlePickJavaExecutable() {
     try {
       const selected = await window.shindo.chooseJavaExecutable({
-        defaultPath: javaPathDraft || config?.jrePath,
+        defaultPath: customPathDraft || config?.javaCustomPath || config?.javaPath || undefined,
       });
       if (selected) {
-        javaPathDraft = selected;
-        manualPathDirty = true;
+        customPathDraft = selected;
+        validationResult = null;
+        validationError = null;
       }
     } catch (error) {
       console.error('Failed to pick Java executable', error);
     }
   }
 
-  async function handleJavaPathSave() {
-    if (!javaPathDraft.trim()) return;
-    savingJavaPath = true;
+  async function handleValidateAndSave() {
+    if (!customPathDraft.trim()) return;
+    validating = true;
+    validationError = null;
     try {
-      await applyConfigPatch({ jrePath: javaPathDraft.trim() });
-      manualPathDirty = false;
+      const result = await window.shindo.validateJavaExecutable(customPathDraft.trim());
+      validationResult = result;
+      if (result.ok) {
+        const major = parseMajor(result.versionText) ?? config?.javaRuntimeMajor ?? undefined;
+        await applyConfigPatch({
+          javaSource: 'custom',
+          javaCustomPath: customPathDraft.trim(),
+          javaPath: customPathDraft.trim(),
+          javaRuntimeMajor: major as LauncherConfig['javaRuntimeMajor'],
+        });
+      }
     } catch (error) {
-      console.error('Failed to save Java path', error);
+      const message = error instanceof Error ? error.message : String(error);
+      validationError = message;
+      validationResult = null;
     } finally {
-      savingJavaPath = false;
+      validating = false;
+    }
+  }
+
+  async function handleUseAutoJava() {
+    try {
+      await applyConfigPatch({
+        javaSource: 'auto',
+        javaCustomPath: null,
+        javaPath: null,
+        javaRuntimeMajor: undefined,
+      });
+      customPathDraft = '';
+      validationResult = null;
+      validationError = null;
+    } catch (error) {
+      console.error('Failed to reset Java', error);
     }
   }
 </script>
 
-<style>
+<style lang="scss">
+  @use '../styles/variables' as v;
   :global(body) {
     background: #000;
     color: #fff;
@@ -250,105 +221,87 @@
         <div class="mb-3 flex items-start justify-between gap-4">
           <div>
             <p class="text-xs uppercase tracking-[0.3em] text-gray-400">{$t('settings.runtimeTitle')}</p>
-            <h2 class="text-2xl font-semibold text-white">{javaStatus.title}</h2>
+            <h2 class="text-2xl font-semibold text-white">{javaCardTitle}</h2>
+            <p class="text-sm text-gray-400 mt-2">{javaCardDetail}</p>
+            {#if javaPath}
+              <p class="text-xs text-gray-500 mt-1">{$t('settings.javaPathLabel')}: {javaPath}</p>
+            {:else}
+              <p class="text-xs text-gray-500 mt-1">{$t('settings.javaAutoPendingHint')}</p>
+            {/if}
           </div>
-          <span class={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] ${statusToneClasses[javaStatus.tone]}`}>
-            {javaStatus.tone === 'warning' ? 'Aviso' : 'OK'}
-          </span>
         </div>
-        <p class="text-sm text-gray-400 mb-6">{javaStatus.detail}</p>
-        <div class="space-y-4">
-          <div>
-            <label
-              class="text-xs uppercase tracking-[0.3em] text-gray-400"
-              for="runtime-select"
-            >{$t('settings.runtimeDescription')}</label>
-            <select
-              class="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-transparent focus:ring-2 focus:ring-blue-500"
-              id="runtime-select"
-              value={jrePreference}
-                on:change={handleJreChange}
-              >
-              <option value="system">{$t('settings.runtimeSystem')}</option>
-              <option value="zulu">{$t('settings.runtimeZulu')}</option>
-              <option value="temurin">{$t('settings.runtimeTemurin')}</option>
-            </select>
-          </div>
+        <div class="mt-6">
+          <button
+            type="button"
+            class="flex w-full items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-gray-200 transition hover:border-slate-700"
+            on:click={() => (experimentalOpen = !experimentalOpen)}
+          >
+            <span>{$t('settings.javaExperimentalTitle')}</span>
+            <span class="text-xs text-gray-400">{experimentalOpen ? '−' : '+'}</span>
+          </button>
 
-          <div class="grid gap-4 md:grid-cols-2">
-            <div>
-              <label class="text-xs uppercase tracking-[0.3em] text-gray-400" for="java-version-select">
-                Java Version
-              </label>
-              <select
-                id="java-version-select"
-                class="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-transparent focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
-                value={javaVersion}
-                on:change={handleJavaVersionChange}
-                disabled={jrePreference === 'system'}
-              >
-                <option value="8">Java 8</option>
-                <option value="11">Java 11</option>
-                <option value="17">Java 17</option>
-                <option value="21">Java 21</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-xs uppercase tracking-[0.3em] text-gray-400" for="java-package-select">
-                Package
-              </label>
-              <select
-                id="java-package-select"
-                class="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-transparent focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
-                value={javaPackage}
-                on:change={handleJavaPackageChange}
-                disabled={jrePreference === 'system'}
-              >
-                <option value="jre">JRE</option>
-                <option value="jdk">JDK</option>
-                <option value="jdk-full">JDK Full</option>
-              </select>
-            </div>
-          </div>
+          {#if experimentalOpen}
+            <div class="mt-4 space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+              <div class="flex flex-col gap-3 sm:flex-row">
+                <input
+                  type="text"
+                  class="flex-1 rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                  bind:value={customPathDraft}
+                  on:input={handleCustomPathInput}
+                  placeholder={$t('settings.javaCustomPlaceholder')}
+                />
+                <button
+                  type="button"
+                  class="rounded-lg bg-blue-500 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-blue-400"
+                  on:click={handlePickJavaExecutable}
+                >
+                  {$t('settings.runtimeActionLocate')}
+                </button>
+              </div>
 
-          <div class="rounded-lg border border-slate-800 bg-slate-950/50 p-4 space-y-2 text-sm">
-            <p class="text-xs uppercase tracking-[0.3em] text-gray-400">{$t('settings.runtimeAvailabilityTitle')}</p>
-            <p class="text-sm text-gray-200">{availabilityNote}</p>
-            <p class="text-xs text-gray-400">
-              {$t('settings.runtimeAvailabilityVersions', { list: supportedVersions.join(', ') })}
-            </p>
-            <p class="text-xs text-gray-400">{packageListText}</p>
-          </div>
+              <div class="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-lg border border-transparent bg-blue-500 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-blue-400 disabled:opacity-60"
+                  on:click={handleValidateAndSave}
+                  disabled={!customPathDraft.trim() || validating}
+                >
+                  {validating ? $t('settings.jvmSaving') : $t('settings.javaValidate')}
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-gray-200 transition hover:border-slate-500 disabled:opacity-60"
+                  on:click={handleUseAutoJava}
+                  disabled={config?.javaSource === 'auto' && !config?.javaCustomPath}
+                >
+                  {$t('settings.javaUseAuto')}
+                </button>
+                <span class="text-[11px] text-gray-500">{$t('settings.javaExperimentalHint')}</span>
+              </div>
 
-          <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-            <div class="flex flex-col gap-3 sm:flex-row">
-              <input
-                type="text"
-                class="flex-1 rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                value={javaPathDraft}
-                on:input={handleJavaPathInput}
-                placeholder={$t('settings.runtimePathManual')}
-              />
-              <button
-                type="button"
-                class="rounded-lg bg-blue-500 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-blue-400"
-                on:click={handlePickJavaExecutable}
-              >
-                {$t('settings.runtimeActionLocate')}
-              </button>
+              {#if validationResult}
+                <div
+                  class={`rounded-lg border p-4 ${validationResult.ok ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-100' : 'border-amber-500/40 bg-amber-500/5 text-amber-100'}`}
+                >
+                  <p class="font-semibold">
+                    {validationResult.ok
+                      ? $t('settings.javaValidationOk')
+                      : $t('settings.javaValidationFail')}
+                  </p>
+                  {#if validationResult.versionText}
+                    <pre class="mt-2 whitespace-pre-wrap text-xs text-gray-200">{validationResult.versionText}</pre>
+                  {/if}
+                  {#if validationResult.error}
+                    <p class="mt-1 text-xs text-red-200">{validationResult.error}</p>
+                  {/if}
+                </div>
+              {/if}
+
+              {#if validationError}
+                <p class="text-xs text-red-300">{validationError}</p>
+              {/if}
             </div>
-            <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-lg border border-transparent bg-blue-500 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-blue-400 disabled:opacity-60"
-                on:click={handleJavaPathSave}
-                disabled={!javaPathDraft.trim() || savingJavaPath}
-              >
-                {savingJavaPath ? $t('settings.jvmSaving') : $t('settings.runtimeActionSave')}
-              </button>
-              <span>{config?.jrePath ? $t('settings.runtimePathAuto') : $t('settings.runtimePathManual')}</span>
-            </div>
-          </div>
+          {/if}
         </div>
       </section>
 

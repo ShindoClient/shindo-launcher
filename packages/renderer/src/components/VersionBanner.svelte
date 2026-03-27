@@ -5,7 +5,8 @@
   export let presentation: ResolvedVersionPresentation;
 </script>
 
-<style>
+<style lang="scss">
+  @use '../styles/variables' as v;
   .version-banner {
     position: relative;
     display: flex;

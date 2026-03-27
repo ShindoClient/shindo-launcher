@@ -40,21 +40,42 @@
   });
 
   $: isSettingsOpen = $appStore.screen === 'settings';
+  $: showNavigation = $appStore.screen !== 'update';
 </script>
 
-<style>
+<style lang="scss">
+  @use '../styles/variables' as v;
+  @use '../styles/mixins';
+
   .title-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 14px;
     height: 72px;
-    padding: 0 20px;
-    background: #000000;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-    -webkit-app-region: drag;
+    padding: 0 16px;
+    background: v.$color-bg-app;
+    border-bottom: 1px solid v.$color-border-soft;
+    color: v.$color-text;
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  .title-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    -webkit-app-region: no-drag;
+    margin-left: auto;
+  }
+
+  .drag-zone {
+    flex: 1;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 16px;
+    -webkit-app-region: drag;
+    min-width: 0;
   }
 
   .title-left {
@@ -62,14 +83,7 @@
     align-items: center;
     gap: 10px;
     min-width: 0;
-  }
-
-  .title-center {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    flex: 1;
+    grid-column: 1;
   }
 
   .logo {
@@ -77,6 +91,7 @@
     height: 24px;
     border-radius: 6px;
     -webkit-app-region: no-drag;
+    pointer-events: auto;
   }
 
   .title-text {
@@ -84,7 +99,7 @@
     align-items: baseline;
     font-size: 14px;
     font-weight: 700;
-    color: #ffffff;
+    color: v.$color-text;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -95,14 +110,17 @@
     margin-left: 6px;
     font-size: 11px;
     font-weight: 500;
-    color: #94a3b8;
+    color: v.$color-muted-strong;
   }
 
-  .title-controls {
+  .title-nav {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    gap: 9px;
     -webkit-app-region: no-drag;
+    grid-column: 2;
+    justify-self: center;
   }
 
   .control-button {
@@ -112,15 +130,15 @@
     align-items: center;
     justify-content: center;
     border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid v.$color-border-soft;
+    background: v.$color-surface-weak;
     color: #cbd5e1;
     transition: all 0.2s ease;
   }
 
   .control-button:focus-visible {
-    outline: 2px solid #3b82f6;
-    outline-offset: 1px;
+    outline: none;
+    @include mixins.focus-ring;
   }
 
   .icon {
@@ -130,7 +148,7 @@
 
   .control-button:hover {
     background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(59, 130, 246, 0.3);
+    border-color: v.$color-border-strong;
   }
 
   .control-button:active {
@@ -146,7 +164,7 @@
   .control-button.nav {
     width: 40px;
     height: 40px;
-    background: rgba(59, 130, 246, 0.08);
+    background: v.$color-surface-strong;
     border-color: rgba(59, 130, 246, 0.25);
     transition: box-shadow 0.25s ease;
     box-shadow: 0 6px 18px rgba(15, 23, 42, 0.35);
@@ -159,22 +177,18 @@
     box-shadow: 0 10px 28px rgba(59, 130, 246, 0.3);
   }
 
-  @keyframes floatNav {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-3px);
-    }
+  .control-button.nav:focus-visible {
+    outline: none;
+    @include mixins.focus-ring;
   }
 </style>
 
-  <header
-    class="title-bar"
-    role="presentation"
-    on:dblclick|preventDefault|stopPropagation={() => null}
-  >
+<header
+  class="title-bar"
+  role="presentation"
+  on:dblclick|preventDefault|stopPropagation={() => null}
+>
+  <div class="drag-zone">
     <div class="title-left">
       <img class="logo" src={logoUrl} alt="Shindo Launcher Logo" draggable="false" />
       <span class="title-text">
@@ -184,42 +198,47 @@
         {/if}
       </span>
     </div>
-    <div class="title-center">
-      <button
-        type="button"
-        class={`control-button nav ${$appStore.screen === 'home' ? 'active' : ''}`}
-        aria-label="Home"
-        on:click|stopPropagation={goHome}
-      >
-        <Home class="icon" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        class={`control-button nav ${$appStore.screen === 'settings' ? 'active' : ''}`}
-        aria-label="Settings"
-        on:click|stopPropagation={goSettings}
-      >
-        <Settings class="icon" aria-hidden="true" />
-      </button>
-    </div>
-    <div class="title-controls" role="group" aria-label={$t('titleBar.controls')}>
-      <button
-        type="button"
-        class="control-button"
-        title={$t('titleBar.minimize')}
-        aria-label={$t('titleBar.minimize')}
-        on:click|stopPropagation={minimize}
-      >
-        <Minus class="icon" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        class="control-button close"
-        title={$t('titleBar.close')}
-        aria-label={$t('titleBar.close')}
-        on:click|stopPropagation={close}
-      >
-        <X class="icon" aria-hidden="true" />
-      </button>
-    </div>
-  </header>
+
+    {#if showNavigation}
+      <div class="title-nav">
+        <button
+          type="button"
+          class={`control-button nav ${$appStore.screen === 'home' ? 'active' : ''}`}
+          aria-label="Home"
+          on:click|stopPropagation={goHome}
+        >
+          <Home class="icon" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          class={`control-button nav ${isSettingsOpen ? 'active' : ''}`}
+          aria-label="Settings"
+          on:click|stopPropagation={goSettings}
+        >
+          <Settings class="icon" aria-hidden="true" />
+        </button>
+      </div>
+    {/if}
+  </div>
+
+  <div class="title-controls" role="group" aria-label={$t('titleBar.controls')}>
+    <button
+      type="button"
+      class="control-button"
+      title={$t('titleBar.minimize')}
+      aria-label={$t('titleBar.minimize')}
+      on:click|stopPropagation={minimize}
+    >
+      <Minus class="icon" aria-hidden="true" />
+    </button>
+    <button
+      type="button"
+      class="control-button close"
+      title={$t('titleBar.close')}
+      aria-label={$t('titleBar.close')}
+      on:click|stopPropagation={close}
+    >
+      <X class="icon" aria-hidden="true" />
+    </button>
+  </div>
+</header>

@@ -3,330 +3,267 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
+import { Readable, Transform } from 'node:stream';
 import AdmZip from 'adm-zip';
 import tar from 'tar';
-import { Readable } from 'node:stream';
-import { ReadableStream as WebReadableStream } from 'node:stream/web';
-import type { LauncherConfig } from '@shindo/shared';
+import type { JavaMajor, JavaValidationResult } from '@shindo/shared';
 import { getBaseDataDir } from '../utils/pathResolver';
-import { distributionConfig } from '../config/distributionConfig';
+import { resolveJavaMajorFromVersioning } from './javaMetadataService';
 
-export interface EnsureJreResult {
-  patch?: Partial<LauncherConfig>;
+export interface JavaProgressPayload {
   message: string;
+  percent: number;
+}
+
+export interface EnsureRuntimeResult {
+  path: string;
+  major: JavaMajor;
+  source: 'cached' | 'downloaded';
+  runtimeDir: string;
+}
+
+interface AdoptiumPackage {
+  name: string;
+  link: string;
+  size?: number;
+}
+
+interface AdoptiumBinary {
+  image_type?: string;
+  package?: AdoptiumPackage;
+}
+
+interface AdoptiumRelease {
+  binary?: AdoptiumBinary;
+  binaries?: AdoptiumBinary[];
 }
 
 type ArchiveType = 'zip' | 'tar.gz';
 
-interface RuntimeDescriptor {
-  url: string;
-  archiveType: ArchiveType;
-}
+const ADOPTIUM_BASE = 'https://api.adoptium.net/v3/assets/latest';
 
-type JavaVersion = 8 | 11 | 17 | 21;
-type JavaPackage = 'jre' | 'jdk' | 'jdk-full';
-type JreProvider = 'zulu' | 'temurin' | 'liberica';
+let cachedFetch: typeof fetch | null = null;
 
-type FetchResponse = {
-  ok: boolean;
-  status: number;
-  statusText: string;
-  body?: unknown;
-  json(): Promise<unknown>;
-};
-
-type FetchFn = (input: string, init?: Record<string, unknown>) => Promise<FetchResponse>;
-
-let cachedFetch: FetchFn | null = null;
-
-async function getFetch(): Promise<FetchFn> {
+async function getFetch(): Promise<typeof fetch> {
   if (cachedFetch) return cachedFetch;
   const nativeFetch = (globalThis as Record<string, unknown>).fetch;
   if (typeof nativeFetch === 'function') {
-    cachedFetch = nativeFetch as FetchFn;
+    cachedFetch = nativeFetch as typeof fetch;
     return cachedFetch;
   }
   const mod = await import('node-fetch');
   const impl = (mod as Record<string, unknown>).default ?? mod;
-  cachedFetch = impl as FetchFn;
+  cachedFetch = impl as typeof fetch;
   return cachedFetch;
 }
 
-async function toNodeStream(body: unknown): Promise<NodeJS.ReadableStream> {
-  if (!body) throw new Error('Runtime download failed: empty body');
-  if (typeof (body as NodeJS.ReadableStream).pipe === 'function') {
-    return body as NodeJS.ReadableStream;
-  }
-  if (typeof (body as WebReadableStream).getReader === 'function') {
-    return Readable.fromWeb(body as WebReadableStream);
-  }
-  throw new Error('Runtime download failed: unsupported response body type');
+function runtimeBaseDir(): string {
+  const dir = path.join(getBaseDataDir(), 'java');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
-const TEMURIN_BASE = 'https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u432-b06';
+function runtimeDirFor(major: JavaMajor): string {
+  const dir = path.join(runtimeBaseDir(), `java-${major}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
-const TEMURIN_RUNTIME: Partial<
-  Record<NodeJS.Platform, Partial<Record<string, RuntimeDescriptor>>>
-> = {
-  win32: {
-    x64: {
-      url: `${TEMURIN_BASE}/OpenJDK8U-jre_x64_windows_hotspot_8u432b06.zip`,
-      archiveType: 'zip',
-    },
-  },
-  linux: {
-    x64: {
-      url: `${TEMURIN_BASE}/OpenJDK8U-jre_x64_linux_hotspot_8u432b06.tar.gz`,
-      archiveType: 'tar.gz',
-    },
-    arm64: {
-      url: `${TEMURIN_BASE}/OpenJDK8U-jre_aarch64_linux_hotspot_8u432b06.tar.gz`,
-      archiveType: 'tar.gz',
-    },
-  },
-  darwin: {
-    x64: {
-      url: `${TEMURIN_BASE}/OpenJDK8U-jre_x64_mac_hotspot_8u432b06.tar.gz`,
-      archiveType: 'tar.gz',
-    },
-  },
-};
+function expectedBinaryPath(major: JavaMajor): string {
+  const binName = process.platform === 'win32' ? 'javaw.exe' : 'java';
+  return path.join(runtimeDirFor(major), 'bin', binName);
+}
 
-type RuntimePackageMap = Partial<Record<JavaPackage, RuntimeDescriptor>>;
-type RuntimeVersionMap = Partial<Record<`${JavaVersion}`, RuntimePackageMap>>;
-type RuntimeArchMap = Partial<Record<string, RuntimeVersionMap>>;
-type RuntimePlatformMap = Partial<Record<NodeJS.Platform, RuntimeArchMap>>;
-type RuntimeMap = Record<JreProvider, RuntimePlatformMap>;
+function ensureExecutablePermissions(executablePath: string): void {
+  if (process.platform !== 'win32') {
+    try {
+      fs.chmodSync(executablePath, 0o755);
+    } catch {
+      // best effort
+    }
+  }
+}
 
-function makeStaticProviderMap(
-  source: Partial<Record<NodeJS.Platform, Partial<Record<string, RuntimeDescriptor>>>>,
-): RuntimePlatformMap {
-  const out: RuntimePlatformMap = {};
-  for (const [platform, archRaw] of Object.entries(source) as Array<
-    [NodeJS.Platform, Partial<Record<string, RuntimeDescriptor>>]
-  >) {
-    const archOut: RuntimeArchMap = {};
-    for (const [arch, descriptor] of Object.entries(archRaw ?? {})) {
-      archOut[arch] = {
-        '8': { jre: descriptor },
+export function validateJavaExecutable(executablePath: string): JavaValidationResult {
+  const normalized = executablePath?.trim();
+  if (!normalized) {
+    return { ok: false, path: executablePath, error: 'Empty path' };
+  }
+
+  try {
+    fs.accessSync(normalized, fs.constants.F_OK);
+    if (process.platform !== 'win32') {
+      fs.accessSync(normalized, fs.constants.X_OK);
+    }
+  } catch {
+    return { ok: false, path: normalized, error: 'File not executable' };
+  }
+
+  try {
+    const result = spawnSync(normalized, ['-version'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 8000,
+    });
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
+    if (result.error) {
+      return {
+        ok: false,
+        path: normalized,
+        versionText: output || undefined,
+        error: result.error.message,
       };
     }
-    out[platform] = archOut;
+    const statusOk = typeof result.status === 'number' ? result.status === 0 : true;
+    return {
+      ok: statusOk,
+      path: normalized,
+      versionText: output || undefined,
+      error: statusOk ? undefined : `Exited with code ${result.status ?? 'unknown'}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      path: normalized,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
-  return out;
 }
 
-const RUNTIME_MAP: RuntimeMap = {
-  zulu: makeStaticProviderMap(TEMURIN_RUNTIME),
-  temurin: makeStaticProviderMap(TEMURIN_RUNTIME),
-  liberica: makeStaticProviderMap(TEMURIN_RUNTIME),
-};
-
-let cachedRemoteRuntimeMap: RuntimeMap | null = null;
-let remoteRuntimeChecked = false;
-
-function normalizeArchiveType(value: unknown): ArchiveType | null {
-  if (value === 'zip' || value === 'tar.gz') return value;
-  return null;
+function parseJavaMajor(versionText: string | undefined): JavaMajor | undefined {
+  if (!versionText) return undefined;
+  const match = versionText.match(/version\\s+\"?(\\d+)(?:\\.(\\d+))?/i);
+  if (!match) return undefined;
+  const primary = Number(match[1]);
+  const secondary = Number(match[2]);
+  if (Number.isNaN(primary)) return undefined;
+  if (primary > 1) {
+    return [8, 11, 16, 17, 21].includes(primary) ? (primary as JavaMajor) : undefined;
+  }
+  if (!Number.isNaN(secondary) && secondary >= 0) {
+    const mapped = secondary as JavaMajor;
+    return [8, 11, 16, 17, 21].includes(mapped) ? mapped : undefined;
+  }
+  return undefined;
 }
 
-function asRuntimeDescriptor(value: unknown): RuntimeDescriptor | null {
-  if (!value || typeof value !== 'object') return null;
-  const source = value as Record<string, unknown>;
-  const url =
-    typeof source.url === 'string' && source.url.trim().length > 0 ? source.url.trim() : null;
-  const archiveType = normalizeArchiveType(source.archiveType);
-  if (!url || !archiveType) return null;
-  return { url, archiveType };
+function mapOs(platform: NodeJS.Platform): string {
+  if (platform === 'win32') return 'windows';
+  if (platform === 'darwin') return 'mac';
+  return 'linux';
 }
 
-function parseRuntimeMap(payload: unknown): RuntimeMap | null {
-  if (!payload || typeof payload !== 'object') return null;
+function mapArch(arch: string): string {
+  if (arch === 'arm64') return 'aarch64';
+  if (arch === 'x64') return 'x64';
+  return arch;
+}
 
-  const root = payload as Record<string, unknown>;
-  const runtimeSource =
-    (root.runtimes && typeof root.runtimes === 'object' ? root.runtimes : null) ||
-    (root.providers && typeof root.providers === 'object' ? root.providers : null);
+function archiveTypeFromName(name: string): ArchiveType {
+  return name.toLowerCase().endsWith('.zip') ? 'zip' : 'tar.gz';
+}
 
-  if (!runtimeSource) return null;
+async function fetchJson<T>(url: string): Promise<T> {
+  const fetchFn = await getFetch();
+  const response = await fetchFn(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url} (${response.status} ${response.statusText})`);
+  }
+  return (await response.json()) as T;
+}
 
-  const providers = runtimeSource as Record<string, unknown>;
-  const parsed: RuntimeMap = {
-    zulu: {},
-    temurin: {},
-    liberica: {},
+async function resolveAdoptiumPackage(major: JavaMajor): Promise<{
+  descriptor: AdoptiumPackage;
+  archiveType: ArchiveType;
+}> {
+  const osParam = mapOs(process.platform);
+  const archParam = mapArch(process.arch);
+  const params = new URLSearchParams({
+    architecture: archParam,
+    image_type: 'jre',
+    jvm_impl: 'hotspot',
+    os: osParam,
+    heap_size: 'normal',
+  });
+
+  const url = `${ADOPTIUM_BASE}/${major}/hotspot?${params.toString()}`;
+  const payload = await fetchJson<AdoptiumRelease[]>(url);
+
+  const binaries = payload.flatMap((release) => {
+    const single: AdoptiumBinary[] = [];
+    if (release.binary) single.push(release.binary);
+    if (release.binaries) single.push(...release.binaries);
+    return single;
+  });
+
+  const pick = (preferred: string[]): AdoptiumBinary | null => {
+    for (const binary of binaries) {
+      const pkg = binary.package;
+      if (!pkg?.name || !pkg.link) continue;
+      const lower = pkg.name.toLowerCase();
+      if (!preferred.some((ext) => lower.endsWith(ext))) continue;
+      return binary;
+    }
+    return null;
   };
 
-  for (const provider of ['zulu', 'temurin', 'liberica'] as const) {
-    const providerRaw = providers[provider];
-    if (!providerRaw || typeof providerRaw !== 'object') continue;
-    const platformMap = providerRaw as Record<string, unknown>;
-    for (const platform of Object.keys(platformMap) as NodeJS.Platform[]) {
-      const archRaw = platformMap[platform];
-      if (!archRaw || typeof archRaw !== 'object') continue;
-      const archMap = archRaw as Record<string, unknown>;
-      const normalizedArchMap: RuntimeArchMap = {};
-      for (const [arch, descriptorRaw] of Object.entries(archMap)) {
-        if (!descriptorRaw || typeof descriptorRaw !== 'object') continue;
-        const descriptorObject = descriptorRaw as Record<string, unknown>;
-        const maybeLegacy = asRuntimeDescriptor(descriptorRaw);
-        if (maybeLegacy) {
-          normalizedArchMap[arch] = {
-            '8': { jre: maybeLegacy },
-          };
-          continue;
-        }
+  const preferredBinary =
+    pick(['.zip', '.tar.gz']) ||
+    binaries.find((b) => b.package?.link && b.package.name && b.package.name.includes('jdk'));
 
-        const versionMap: RuntimeVersionMap = {};
-        for (const [versionKey, packageRaw] of Object.entries(descriptorObject)) {
-          if (!['8', '11', '17', '21'].includes(versionKey)) continue;
-          if (!packageRaw || typeof packageRaw !== 'object') continue;
-          const packageMapRaw = packageRaw as Record<string, unknown>;
-          const packageMap: RuntimePackageMap = {};
-
-          for (const pkg of ['jre', 'jdk', 'jdk-full'] as const) {
-            const parsedDescriptor = asRuntimeDescriptor(packageMapRaw[pkg]);
-            if (parsedDescriptor) {
-              packageMap[pkg] = parsedDescriptor;
-            }
-          }
-
-          const directPackage = asRuntimeDescriptor(packageRaw);
-          if (directPackage) {
-            packageMap.jre = directPackage;
-          }
-
-          if (Object.keys(packageMap).length > 0) {
-            versionMap[versionKey as `${JavaVersion}`] = packageMap;
-          }
-        }
-
-        if (Object.keys(versionMap).length > 0) {
-          normalizedArchMap[arch] = versionMap;
-        }
-      }
-      if (Object.keys(normalizedArchMap).length > 0) {
-        parsed[provider][platform] = normalizedArchMap;
-      }
-    }
+  const pkg = preferredBinary?.package;
+  if (!pkg?.link || !pkg.name) {
+    throw new Error(`No compatible Temurin package found for ${osParam}/${archParam}`);
   }
 
-  return parsed;
+  return {
+    descriptor: pkg,
+    archiveType: archiveTypeFromName(pkg.name),
+  };
 }
 
-async function loadRemoteRuntimeMap(): Promise<RuntimeMap | null> {
-  if (remoteRuntimeChecked) {
-    return cachedRemoteRuntimeMap;
-  }
-  remoteRuntimeChecked = true;
-
-  try {
-    const fetch = await getFetch();
-    const response = await fetch(distributionConfig.java.metadataUrl);
-    if (!response.ok) {
-      cachedRemoteRuntimeMap = null;
-      return null;
-    }
-    const payload = await response.json();
-    cachedRemoteRuntimeMap = parseRuntimeMap(payload);
-    return cachedRemoteRuntimeMap;
-  } catch {
-    cachedRemoteRuntimeMap = null;
-    return null;
-  }
-}
-
-function runtimeDir(config: LauncherConfig): string {
-  const provider = config.jrePreference === 'system' ? 'system' : config.jrePreference;
-  const javaVersion = String(config.javaVersion ?? 8);
-  const javaPackage = config.javaPackage ?? 'jre';
-  return path.join(getBaseDataDir(), 'java', `${provider}-java${javaVersion}-${javaPackage}`);
-}
-
-function isExecutablePath(javaPath: string): boolean {
-  try {
-    fs.accessSync(javaPath, fs.constants.F_OK);
-    if (process.platform !== 'win32') {
-      fs.accessSync(javaPath, fs.constants.X_OK);
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function canRunJava(javaPath: string): boolean {
-  if (!isExecutablePath(javaPath)) {
-    return false;
-  }
-  try {
-    const result = spawnSync(javaPath, ['-version'], {
-      timeout: 7000,
-      windowsHide: true,
-      encoding: 'utf8',
-    });
-    if (result.error) {
-      return false;
-    }
-    return typeof result.status === 'number' && result.status === 0;
-  } catch {
-    return false;
-  }
-}
-
-async function downloadToTemp(url: string, extension: string): Promise<string> {
-  const fetch = await getFetch();
-  const response = await fetch(url);
-  if (!response.ok || !response.body) {
-    throw new Error(`Failed to download runtime (${response.status} ${response.statusText})`);
-  }
-
-  const tempPath = path.join(os.tmpdir(), `shindo-runtime-${Date.now()}.${extension}`);
-  const fileStream = fs.createWriteStream(tempPath);
-  const stream = await toNodeStream(response.body);
-  await pipeline(stream, fileStream);
-  return tempPath;
-}
-
-async function extractArchive(
-  archive: string,
-  destination: string,
+async function downloadWithProgress(
+  descriptor: AdoptiumPackage,
   archiveType: ArchiveType,
-): Promise<void> {
-  fs.rmSync(destination, { recursive: true, force: true });
-  fs.mkdirSync(destination, { recursive: true });
-
-  if (archiveType === 'zip') {
-    const zip = new AdmZip(archive);
-    zip.extractAllTo(destination, true);
-    return;
+  onProgress?: (payload: JavaProgressPayload) => void,
+): Promise<{ archivePath: string }> {
+  const fetchFn = await getFetch();
+  const response = await fetchFn(descriptor.link);
+  if (!response.ok || !response.body) {
+    throw new Error(`Failed to download Java runtime (${response.status} ${response.statusText})`);
   }
 
-  await tar.x({ file: archive, cwd: destination });
-}
+  const total = Number(response.headers.get('content-length')) || descriptor.size || 0;
+  let received = 0;
+  const startedAt = Date.now();
 
-function findJavaBinary(rootDir: string): string | null {
-  const expectedName = process.platform === 'win32' ? 'java.exe' : 'java';
-  if (!fs.existsSync(rootDir)) {
-    return null;
-  }
+  const archivePath = path.join(os.tmpdir(), `shindo-temurin-${Date.now()}.${archiveType}`);
+  const fileStream = fs.createWriteStream(archivePath);
+  const sourceStream =
+    typeof (response.body as unknown as NodeJS.ReadableStream).pipe === 'function'
+      ? (response.body as unknown as NodeJS.ReadableStream)
+      : Readable.fromWeb(response.body as unknown as ReadableStream);
 
-  const queue = [rootDir];
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    const entries = fs.readdirSync(current, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        queue.push(full);
-      } else if (entry.name === expectedName) {
-        return full;
+  const progressStream = new Transform({
+    transform(chunk, _encoding, callback) {
+      received += chunk.length;
+      if (onProgress && total > 0) {
+        const percent = Math.min(99, Math.round((received / total) * 80));
+        const elapsed = Math.max(1, Date.now() - startedAt) / 1000;
+        const speedMb = received / 1024 / 1024 / elapsed;
+        const message = `Baixando Java... ${(
+          received /
+          1024 /
+          1024
+        ).toFixed(1)} / ${(total / 1024 / 1024).toFixed(1)} MB (${speedMb.toFixed(1)} MB/s)`;
+        onProgress({ message, percent });
       }
-    }
-  }
+      callback(null, chunk);
+    },
+  });
 
-  return null;
+  await pipeline(sourceStream, progressStream, fileStream);
+  return { archivePath };
 }
 
 function resolveExtractionRoot(dir: string): string {
@@ -337,124 +274,106 @@ function resolveExtractionRoot(dir: string): string {
   return dir;
 }
 
-async function descriptorFor(config: LauncherConfig): Promise<RuntimeDescriptor | null> {
-  const preference = config.jrePreference as Exclude<LauncherConfig['jrePreference'], 'system'>;
-  const versionKey = String(config.javaVersion ?? 8) as `${JavaVersion}`;
-  const packageKey = config.javaPackage ?? 'jre';
-  const remoteMap = await loadRemoteRuntimeMap();
-  const runtimeMap = remoteMap?.[preference] ?? RUNTIME_MAP[preference];
-  const platformMap = runtimeMap[process.platform];
-  if (!platformMap) return null;
-  const archMap = platformMap[process.arch];
-  if (!archMap) return null;
-  const versionMap = archMap[versionKey] ?? archMap['8'];
-  if (!versionMap) return null;
-  return versionMap[packageKey] ?? versionMap.jre ?? null;
+async function extractArchive(
+  archivePath: string,
+  archiveType: ArchiveType,
+  targetDir: string,
+  onProgress?: (payload: JavaProgressPayload) => void,
+): Promise<void> {
+  const extractDir = path.join(os.tmpdir(), `shindo-temurin-extract-${Date.now()}`);
+  fs.rmSync(targetDir, { recursive: true, force: true });
+  fs.mkdirSync(targetDir, { recursive: true });
+  fs.mkdirSync(extractDir, { recursive: true });
+
+  try {
+    if (archiveType === 'zip') {
+      const zip = new AdmZip(archivePath);
+      zip.extractAllTo(extractDir, true);
+    } else {
+      await tar.x({ file: archivePath, cwd: extractDir, strip: 1 });
+    }
+
+    const root = resolveExtractionRoot(extractDir);
+    for (const entry of fs.readdirSync(root)) {
+      fs.cpSync(path.join(root, entry), path.join(targetDir, entry), { recursive: true });
+    }
+    if (onProgress) {
+      onProgress({ message: 'Extraindo Java...', percent: 95 });
+    }
+  } finally {
+    fs.rmSync(extractDir, { recursive: true, force: true });
+  }
 }
 
-export async function ensureJre(config: LauncherConfig): Promise<EnsureJreResult> {
-  if (config.jrePreference === 'system') {
-    if (config.jrePath) {
-      if (canRunJava(config.jrePath)) {
-        return {
-          message: `Using system JRE at ${config.jrePath}`,
-        };
-      }
-      return {
-        patch: { jrePath: undefined },
-        message: `Configured system JRE is invalid (${config.jrePath}). Falling back to Java from PATH.`,
-      };
-    }
-    return {
-      message: 'Using system JRE (PATH).',
-    };
+function hasValidCachedRuntime(major: JavaMajor): string | null {
+  const candidate = expectedBinaryPath(major);
+  const result = validateJavaExecutable(candidate);
+  return result.ok ? candidate : null;
+}
+
+function determineJavaMajorFromMinecraftVersion(minecraftVersion: string | null): JavaMajor {
+  const fallback: JavaMajor = 17;
+  if (!minecraftVersion) return fallback;
+  const match = minecraftVersion.match(/(\\d+)(?:\\.(\\d+))?(?:\\.(\\d+))?/);
+  if (!match) return fallback;
+  const primary = Number(match[1]);
+  const secondary = Number(match[2] ?? '0');
+  const versionMinor = primary === 1 ? secondary : primary;
+
+  if (versionMinor >= 21) return 21;
+  if (versionMinor >= 18) return 17;
+  if (versionMinor >= 17) return 16;
+  return 8;
+}
+
+export async function determineJavaMajor(
+  versionId: string | null,
+  minecraftVersion: string | null,
+): Promise<JavaMajor> {
+  const override = await resolveJavaMajorFromVersioning(versionId, minecraftVersion);
+  if (override) return override;
+  return determineJavaMajorFromMinecraftVersion(minecraftVersion);
+}
+
+export async function ensureJavaRuntime(
+  major: JavaMajor,
+  onProgress?: (payload: JavaProgressPayload) => void,
+): Promise<EnsureRuntimeResult> {
+  const cached = hasValidCachedRuntime(major);
+  if (cached) {
+    onProgress?.({ message: `Java ${major} em cache`, percent: 100 });
+    ensureExecutablePermissions(cached);
+    return { path: cached, major, source: 'cached', runtimeDir: runtimeDirFor(major) };
   }
 
-  const descriptor = await descriptorFor(config);
-  if (!descriptor) {
-    return {
-      patch: { jrePreference: 'system', jrePath: undefined },
-      message: `Runtime ${config.jrePreference} not supported for ${process.platform}/${process.arch}. Using system JRE.`,
-    };
-  }
+  onProgress?.({ message: `Preparando download do Java ${major}...`, percent: 5 });
 
-  const targetDir = runtimeDir(config);
-  fs.mkdirSync(path.dirname(targetDir), { recursive: true });
+  const { descriptor, archiveType } = await resolveAdoptiumPackage(major);
+  const { archivePath } = await downloadWithProgress(descriptor, archiveType, onProgress);
 
-  let hadInvalidConfiguredPath = false;
-
-  if (config.jrePath && fs.existsSync(config.jrePath)) {
-    if (canRunJava(config.jrePath)) {
-      return {
-        message: `Runtime ${config.jrePreference} configured manually at ${config.jrePath}`,
-      };
-    }
-  }
-
-  if (config.jrePath) {
-    hadInvalidConfiguredPath = true;
-  }
-
-  const existingBinary = findJavaBinary(targetDir);
-  if (existingBinary && canRunJava(existingBinary)) {
-    return {
-      patch: { jrePath: existingBinary },
-      message: `Runtime ${config.jrePreference} ready in ${targetDir}`,
-    };
-  }
-
-  if (existingBinary && !canRunJava(existingBinary)) {
-    fs.rmSync(targetDir, { recursive: true, force: true });
-    fs.mkdirSync(targetDir, { recursive: true });
-  }
-
-  let archivePath: string | null = null;
-  const extractDir = path.join(os.tmpdir(), `shindo-java-extract-${Date.now()}`);
+  const targetDir = runtimeDirFor(major);
   try {
-    archivePath = await downloadToTemp(
-      descriptor.url,
-      descriptor.archiveType === 'zip' ? 'zip' : 'tar.gz',
-    );
-    fs.mkdirSync(extractDir, { recursive: true });
-    await extractArchive(archivePath, extractDir, descriptor.archiveType);
-    const sourceRoot = resolveExtractionRoot(extractDir);
-    fs.rmSync(targetDir, { recursive: true, force: true });
-    fs.mkdirSync(targetDir, { recursive: true });
-    for (const entry of fs.readdirSync(sourceRoot)) {
-      fs.cpSync(path.join(sourceRoot, entry), path.join(targetDir, entry), { recursive: true });
-    }
-  } catch (error) {
-    if (archivePath && fs.existsSync(archivePath)) {
-      fs.unlinkSync(archivePath);
-    }
-    if (fs.existsSync(extractDir)) {
-      fs.rmSync(extractDir, { recursive: true, force: true });
-    }
-    return {
-      patch: { jrePreference: 'system', jrePath: undefined },
-      message: `Failed to prepare runtime ${config.jrePreference}: ${error instanceof Error ? error.message : String(error)}. Falling back to system JRE.`,
-    };
+    await extractArchive(archivePath, archiveType, targetDir, onProgress);
   } finally {
-    if (archivePath && fs.existsSync(archivePath)) {
-      fs.unlinkSync(archivePath);
-    }
-    if (fs.existsSync(extractDir)) {
-      fs.rmSync(extractDir, { recursive: true, force: true });
-    }
+    fs.rmSync(archivePath, { force: true });
   }
 
-  const javaBinary = findJavaBinary(targetDir);
-  if (!javaBinary || !canRunJava(javaBinary)) {
-    return {
-      patch: { jrePreference: 'system', jrePath: undefined },
-      message: `Runtime ${config.jrePreference} was downloaded but Java executable is not runnable. Reverting to system JRE.`,
-    };
+  const binaryPath = expectedBinaryPath(major);
+  ensureExecutablePermissions(binaryPath);
+  const validation = validateJavaExecutable(binaryPath);
+  if (!validation.ok) {
+    fs.rmSync(targetDir, { recursive: true, force: true });
+    throw new Error(
+      `Java ${major} was downloaded but is not runnable${validation.error ? `: ${validation.error}` : ''}`,
+    );
   }
 
-  return {
-    patch: { jrePath: javaBinary },
-    message: hadInvalidConfiguredPath
-      ? `Configured JRE path was invalid. Runtime ${config.jrePreference} was repaired in ${targetDir}`
-      : `Runtime ${config.jrePreference} ready in ${targetDir}`,
-  };
+  onProgress?.({ message: `Java ${major} pronto`, percent: 100 });
+  return { path: binaryPath, major, source: 'downloaded', runtimeDir: targetDir };
+}
+
+export function summarizeValidation(
+  result: JavaValidationResult,
+): { ok: boolean; major?: JavaMajor } {
+  return { ok: result.ok, major: parseJavaMajor(result.versionText) };
 }
