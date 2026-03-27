@@ -5,12 +5,7 @@ import {
   type LaunchLogLevel,
   type LauncherConfig,
 } from '@shindo/shared';
-import {
-  BrowserWindow,
-  app,
-  nativeImage,
-  shell,
-} from 'electron';
+import { BrowserWindow, app, nativeImage, shell } from 'electron';
 import path from 'node:path';
 import { LauncherService } from './services/launcherService';
 import {
@@ -19,6 +14,7 @@ import {
   clearLaunchLogBuffer,
   getLaunchLogBuffer,
   initLogFile,
+  LogLevel,
   logMessage,
 } from './services/logService';
 import { registerIpcHandlers } from './ipc/registerIpcHandlers';

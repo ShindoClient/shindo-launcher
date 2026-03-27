@@ -37,7 +37,8 @@ function normalizeConfig(raw: Partial<LauncherConfig> & Record<string, unknown>)
   const legacyPath = (raw as Record<string, unknown>).jrePath as string | undefined;
   const customPath = raw.javaCustomPath ?? null;
   const javaSource = normalizeJavaSource(raw.javaSource, Boolean(customPath));
-  const javaPath = raw.javaPath ?? (javaSource === 'custom' ? customPath ?? null : null) ?? legacyPath ?? null;
+  const javaPath =
+    raw.javaPath ?? (javaSource === 'custom' ? (customPath ?? null) : null) ?? legacyPath ?? null;
 
   return {
     ...DEFAULT_CONFIG,
@@ -45,7 +46,9 @@ function normalizeConfig(raw: Partial<LauncherConfig> & Record<string, unknown>)
     javaSource,
     javaCustomPath: customPath ?? null,
     javaPath: javaPath ?? null,
-    javaRuntimeMajor: normalizeJavaMajor(raw.javaRuntimeMajor ?? (raw as Record<string, unknown>).javaVersion),
+    javaRuntimeMajor: normalizeJavaMajor(
+      raw.javaRuntimeMajor ?? (raw as Record<string, unknown>).javaVersion,
+    ),
   };
 }
 
@@ -68,7 +71,7 @@ export function loadConfig(): LauncherConfig {
   ensureConfigDir();
   const config = readConfigFromDisk();
   if (config) {
-    const normalized = normalizeConfig(config);
+    const normalized = normalizeConfig(config as Partial<LauncherConfig> & Record<string, unknown>);
     saveConfig(normalized);
     return normalized;
   }
