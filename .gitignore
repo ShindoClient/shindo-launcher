@@ -5,3 +5,7 @@ release/
 packages/renderer/.devserver.json
 
 out/
+.codex/
+.claude/
+CLAUDE.MD
+AGENTS.MD
