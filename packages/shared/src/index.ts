@@ -95,8 +95,12 @@ export interface ClientStatePayload {
 }
 
 export interface VersionBuildCatalogEntry {
+  versionBase: number;
+  buildNumber: number;
+  buildId: string;
+  type: 'stable' | 'snapshot' | 'dev';
+  semver: string;
   build: number;
-  semver: string | null;
   label: string;
   packageUrl: string | null;
   jarUrl: string | null;
@@ -115,7 +119,9 @@ export interface VersionCatalogEntry {
   assetsIndex: string | null;
   baseVersion: string | null;
   latestBuild: number | null;
+  latestBuildId: string | null;
   latestSemver: string | null;
+  latestType: 'stable' | 'snapshot' | 'dev' | null;
   builds: VersionBuildCatalogEntry[];
 }
 
@@ -207,6 +213,7 @@ export interface LauncherConfig {
   javaPath?: string | null;
   javaCustomPath?: string | null;
   javaRuntimeMajor?: JavaMajor;
+  jrePath?: string | null;
   jvmArgs: string;
   versionId: string;
   selectedBuild?: number | null;

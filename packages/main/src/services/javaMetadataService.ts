@@ -1,116 +1,116 @@
 import type { JavaMajor } from '@shindo/shared';
 import { sanitizeVersionId } from '../config/distributionConfig';
-import { loadVersioningManifest, VersioningEntry, VersioningManifest } from './cdnClient';
+import type { VersioningEntry, VersioningManifest } from './cdnClient';
+import { loadVersioningManifest } from './cdnClient';
+
+// ─── Cache ────────────────────────────────────────────────────────────────────
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 let cachedManifest: VersioningManifest | null = null;
 let cacheExpiresAt = 0;
 
-async function getCachedManifest(force = false): Promise<VersioningManifest | null> {
+async function getCachedManifest(): Promise<VersioningManifest | null> {
   const now = Date.now();
-  if (!force && cachedManifest && now < cacheExpiresAt) {
-    return cachedManifest;
-  }
+  if (cachedManifest && now < cacheExpiresAt) return cachedManifest;
 
   const manifest = await loadVersioningManifest();
   if (manifest) {
     cachedManifest = manifest;
     cacheExpiresAt = now + CACHE_TTL_MS;
-    return cachedManifest;
-  }
-
-  if (cachedManifest) {
+  } else if (cachedManifest) {
+    // Stale cache is better than nothing on network failure
     cacheExpiresAt = now + CACHE_TTL_MS;
-    return cachedManifest;
   }
 
-  return null;
+  return cachedManifest;
 }
 
-function asString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+// ─── Entry Matching ───────────────────────────────────────────────────────────
+
+function collectEntries(manifest: VersioningManifest): VersioningEntry[] {
+  const entries: VersioningEntry[] = [];
+
+  if (Array.isArray(manifest.versions)) {
+    entries.push(...manifest.versions);
+  } else if (manifest.versions && typeof manifest.versions === 'object') {
+    entries.push(...Object.values(manifest.versions));
+  }
+
+  if (manifest.latest) entries.push(manifest.latest);
+  return entries;
 }
 
-function extractEntryId(entry: VersioningEntry): string | null {
+function entryId(entry: VersioningEntry): string | null {
   const raw = entry.versionId ?? entry.id;
   return raw ? sanitizeVersionId(raw) : null;
 }
 
 function findVersionEntry(
   manifest: VersioningManifest,
-  versionId?: string | null,
-  minecraftVersion?: string | null,
+  versionId: string | null | undefined,
+  minecraftVersion: string | null | undefined,
 ): VersioningEntry | null {
   const targetId = versionId ? sanitizeVersionId(versionId) : null;
   const defaultId = manifest.defaultVersionId ? sanitizeVersionId(manifest.defaultVersionId) : null;
+  const entries = collectEntries(manifest);
 
-  const entries: VersioningEntry[] = [];
-  if (Array.isArray(manifest.versions)) {
-    entries.push(...manifest.versions);
-  } else if (manifest.versions && typeof manifest.versions === 'object') {
-    entries.push(...Object.values(manifest.versions));
-  }
-  if (manifest.latest) {
-    entries.push(manifest.latest);
-  }
-
-  let fallbackEntry: VersioningEntry | null = null;
+  let fallback: VersioningEntry | null = null;
 
   for (const entry of entries) {
-    const entryId = extractEntryId(entry);
-    if (entryId) {
-      if (targetId && entryId === targetId) {
-        return entry;
-      }
-      if (!targetId && defaultId && entryId === defaultId) {
-        fallbackEntry = entry;
-      }
-      if (targetId && defaultId && entryId === defaultId) {
-        fallbackEntry = entry;
-      }
-    }
+    const id = entryId(entry);
+    if (!id) continue;
+
+    // Exact match wins immediately
+    if (targetId && id === targetId) return entry;
+
+    // Track default entry as fallback
+    if (defaultId && id === defaultId) fallback ??= entry;
   }
 
-  if (fallbackEntry) {
-    return fallbackEntry;
-  }
+  if (fallback) return fallback;
 
+  // Match by Minecraft version string
   if (minecraftVersion) {
-    const normalized = minecraftVersion.trim();
-    if (normalized) {
-      for (const entry of entries) {
-        const entryMinecraft = asString(entry.minecraftVersion) ?? asString(entry.baseVersion);
-        if (entryMinecraft && entryMinecraft === normalized) {
-          return entry;
-        }
-      }
+    const mc = minecraftVersion.trim();
+    for (const entry of entries) {
+      const entryMc =
+        (typeof entry.minecraftVersion === 'string' ? entry.minecraftVersion.trim() : null) ||
+        (typeof entry.baseVersion === 'string' ? entry.baseVersion.trim() : null);
+      if (entryMc && entryMc === mc) return entry;
     }
   }
 
   return manifest.latest ?? null;
 }
 
-function parseJavaMajorFromValue(value: unknown): JavaMajor | null {
+// ─── Java Major Parsing ───────────────────────────────────────────────────────
+
+const VALID_MAJORS: JavaMajor[] = [8, 11, 16, 17, 21];
+
+function parseJavaMajor(value: unknown): JavaMajor | null {
   if (value == null) return null;
+
+  let n: number;
   if (typeof value === 'number') {
-    if ([8, 11, 16, 17, 21].includes(value)) {
-      return value as JavaMajor;
-    }
-    return null;
-  }
-  if (typeof value === 'string') {
+    n = value;
+  } else if (typeof value === 'string') {
     const digits = value.match(/\d+/g);
     if (!digits) return null;
-    const numeric = Number(digits.join(''));
-    if (Number.isNaN(numeric)) return null;
-    if ([8, 11, 16, 17, 21].includes(numeric)) {
-      return numeric as JavaMajor;
-    }
+    n = Number(digits.join(''));
+  } else {
+    return null;
   }
-  return null;
+
+  return !Number.isNaN(n) && VALID_MAJORS.includes(n as JavaMajor) ? (n as JavaMajor) : null;
 }
 
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Resolves the required Java major version from the CDN versioning manifest.
+ * Returns `null` if no manifest is available or no explicit mapping exists.
+ */
 export async function resolveJavaMajorFromVersioning(
   versionId?: string | null,
   minecraftVersion?: string | null,
@@ -121,6 +121,5 @@ export async function resolveJavaMajorFromVersioning(
   const entry = findVersionEntry(manifest, versionId, minecraftVersion);
   if (!entry) return null;
 
-  const candidate = entry.javaId ?? entry.javaVersion ?? entry.javaMajor ?? null;
-  return parseJavaMajorFromValue(candidate);
+  return parseJavaMajor(entry.javaId ?? entry.javaVersion ?? entry.javaMajor ?? null);
 }

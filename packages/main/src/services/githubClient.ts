@@ -1,5 +1,8 @@
 import { Readable } from 'node:stream';
 import { ReadableStream as WebReadableStream } from 'node:stream/web';
+import { getFetch } from './fetchClient';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const GITHUB_API = 'https://api.github.com';
 const DEFAULT_HEADERS: Record<string, string> = {
@@ -7,20 +10,11 @@ const DEFAULT_HEADERS: Record<string, string> = {
   Accept: 'application/vnd.github+json',
 };
 
-type FetchResponse = {
-  ok: boolean;
-  status: number;
-  statusText: string;
-  body?: unknown;
-  text(): Promise<string>;
-  json(): Promise<unknown>;
-};
-
-type FetchFn = (input: string, init?: Record<string, unknown>) => Promise<FetchResponse>;
+// ─── Error ────────────────────────────────────────────────────────────────────
 
 export class GitHubHttpError extends Error {
   constructor(
-    public status: number,
+    public readonly status: number,
     message: string,
   ) {
     super(message);
@@ -28,38 +22,7 @@ export class GitHubHttpError extends Error {
   }
 }
 
-let cachedFetch: FetchFn | null = null;
-
-async function getFetch(): Promise<FetchFn> {
-  if (cachedFetch) return cachedFetch;
-
-  const nativeFetch = (globalThis as Record<string, unknown>).fetch;
-  if (typeof nativeFetch === 'function') {
-    cachedFetch = nativeFetch as FetchFn;
-    return cachedFetch;
-  }
-
-  const mod = await import('node-fetch');
-  const impl = (mod as Record<string, unknown>).default ?? mod;
-  cachedFetch = impl as FetchFn;
-  return cachedFetch;
-}
-
-async function requestJson<T>(url: string): Promise<T> {
-  const fetch = await getFetch();
-  const response = await fetch(url, { headers: DEFAULT_HEADERS });
-  await ensureOk(response, 'GitHub request failed');
-  return response.json() as Promise<T>;
-}
-
-async function ensureOk(response: FetchResponse, errorPrefix: string): Promise<void> {
-  if (response.ok) return;
-  const body = await response.text();
-  throw new GitHubHttpError(
-    response.status,
-    `${errorPrefix}: ${response.status} ${response.statusText} :: ${body}`,
-  );
-}
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface GitHubAsset {
   id: number;
@@ -79,13 +42,41 @@ export interface GitHubRelease {
   published_at?: string;
 }
 
-export async function fetchLatestRelease(repo: string): Promise<GitHubRelease> {
-  return requestJson<GitHubRelease>(`${GITHUB_API}/repos/${repo}/releases/latest`);
-}
-
 export interface DownloadAssetOptions {
   headers?: Record<string, string>;
   signal?: AbortSignal;
+}
+
+// ─── Internal Helpers ─────────────────────────────────────────────────────────
+
+async function ensureOk(
+  response: { ok: boolean; status: number; statusText: string; text(): Promise<string> },
+  errorPrefix: string,
+): Promise<void> {
+  if (response.ok) return;
+  const body = await response.text();
+  throw new GitHubHttpError(
+    response.status,
+    `${errorPrefix}: ${response.status} ${response.statusText} :: ${body}`,
+  );
+}
+
+function toNodeStream(body: unknown): NodeJS.ReadableStream {
+  if (!body) throw new Error('Asset download failed: empty body');
+  if (typeof (body as NodeJS.ReadableStream).pipe === 'function') return body as NodeJS.ReadableStream;
+  if (typeof (body as WebReadableStream).getReader === 'function') return Readable.fromWeb(body as WebReadableStream);
+  throw new Error('Asset download failed: unsupported response body type');
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+export async function fetchLatestRelease(repo: string): Promise<GitHubRelease> {
+  const fetch = await getFetch();
+  const response = await fetch(`${GITHUB_API}/repos/${repo}/releases/latest`, {
+    headers: DEFAULT_HEADERS,
+  });
+  await ensureOk(response, 'GitHub request failed');
+  return response.json() as Promise<GitHubRelease>;
 }
 
 export async function downloadAsset(
@@ -98,22 +89,6 @@ export async function downloadAsset(
     signal,
   });
   await ensureOk(response, 'Asset download failed');
-  if (!response.body) {
-    throw new Error('Asset download failed: empty body');
-  }
+  if (!response.body) throw new Error('Asset download failed: empty body');
   return toNodeStream(response.body);
-}
-
-async function toNodeStream(body: unknown): Promise<NodeJS.ReadableStream> {
-  if (!body) throw new Error('Asset download failed: empty body');
-
-  if (typeof (body as NodeJS.ReadableStream).pipe === 'function') {
-    return body as NodeJS.ReadableStream;
-  }
-
-  if (typeof (body as WebReadableStream).getReader === 'function') {
-    return Readable.fromWeb(body as WebReadableStream);
-  }
-
-  throw new Error('Unsupported response body type');
 }

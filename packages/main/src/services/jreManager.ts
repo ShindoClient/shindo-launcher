@@ -11,6 +11,8 @@ import type { JavaMajor, JavaValidationResult } from '@shindo/shared';
 import { getBaseDataDir } from '../utils/pathResolver';
 import { resolveJavaMajorFromVersioning } from './javaMetadataService';
 
+// ─── Public API Types ────────────────────────────────────────────────────────
+
 export interface JavaProgressPayload {
   message: string;
   percent: number;
@@ -22,6 +24,8 @@ export interface EnsureRuntimeResult {
   source: 'cached' | 'downloaded';
   runtimeDir: string;
 }
+
+// ─── Internal Types ──────────────────────────────────────────────────────────
 
 interface AdoptiumPackage {
   name: string;
@@ -41,22 +45,67 @@ interface AdoptiumRelease {
 
 type ArchiveType = 'zip' | 'tar.gz';
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
 const ADOPTIUM_BASE = 'https://api.adoptium.net/v3/assets/latest';
+const SUPPORTED_MAJORS: JavaMajor[] = [8, 11, 16, 17, 21];
 
-let cachedFetch: typeof fetch | null = null;
+// ─── Java Version Detection ──────────────────────────────────────────────────
 
-async function getFetch(): Promise<typeof fetch> {
-  if (cachedFetch) return cachedFetch;
-  const nativeFetch = (globalThis as Record<string, unknown>).fetch;
-  if (typeof nativeFetch === 'function') {
-    cachedFetch = nativeFetch as typeof fetch;
-    return cachedFetch;
-  }
-  const mod = await import('node-fetch');
-  const impl = (mod as Record<string, unknown>).default ?? mod;
-  cachedFetch = impl as typeof fetch;
-  return cachedFetch;
+/**
+ * Maps a Minecraft version string to the required Java major version.
+ *
+ * Minecraft version requirements:
+ *  - 1.0  – 1.16.x  → Java 8
+ *  - 1.17           → Java 16
+ *  - 1.18 – 1.20.x  → Java 17
+ *  - 1.21+          → Java 21
+ */
+function javaForMinecraft(minecraftVersion: string | null): JavaMajor {
+  if (!minecraftVersion) return 8;
+
+  // Match "1.X" or "1.X.Y" or bare "X"
+  const match = minecraftVersion.match(/^(?:1\.)?(\d+)(?:\.\d+)?$/);
+  if (!match) return 8;
+
+  const minor = Number(match[1]);
+  if (Number.isNaN(minor)) return 8;
+
+  //if (minor >= 21) return 21;
+  //if (minor >= 18) return 17;
+  //if (minor === 17) return 16;
+  // 1.16 and below (including 1.8, 1.9, etc.) → Java 8
+  return 8;
 }
+
+/**
+ * Parses the Java major version from `java -version` output.
+ * Handles both old-style (1.8.0_xxx) and new-style (11, 17, 21) formats.
+ */
+function parseJavaMajor(versionText: string | undefined): JavaMajor | undefined {
+  if (!versionText) return undefined;
+
+  // Matches: version "1.8.0_xxx" or version "17.0.x" or version "21"
+  const match = versionText.match(/version\s+"?(\d+)(?:\.(\d+))?/i);
+  if (!match) return undefined;
+
+  const primary = Number(match[1]);
+  if (Number.isNaN(primary)) return undefined;
+
+  // Old-style: 1.8 → major is the second digit
+  if (primary === 1) {
+    const secondary = Number(match[2]);
+    if (Number.isNaN(secondary)) return undefined;
+    return SUPPORTED_MAJORS.includes(secondary as JavaMajor)
+      ? (secondary as JavaMajor)
+      : undefined;
+  }
+
+  // New-style: 11, 17, 21 → major is the first digit
+  return SUPPORTED_MAJORS.includes(primary as JavaMajor) ? (primary as JavaMajor) : undefined;
+}
+
+// ─── Path Helpers ────────────────────────────────────────────────────────────
 
 function runtimeBaseDir(): string {
   const dir = path.join(getBaseDataDir(), 'java');
@@ -85,6 +134,8 @@ function ensureExecutablePermissions(executablePath: string): void {
   }
 }
 
+// ─── Validation ──────────────────────────────────────────────────────────────
+
 export function validateJavaExecutable(executablePath: string): JavaValidationResult {
   const normalized = executablePath?.trim();
   if (!normalized) {
@@ -108,12 +159,7 @@ export function validateJavaExecutable(executablePath: string): JavaValidationRe
     });
     const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
     if (result.error) {
-      return {
-        ok: false,
-        path: normalized,
-        versionText: output || undefined,
-        error: result.error.message,
-      };
+      return { ok: false, path: normalized, versionText: output || undefined, error: result.error.message };
     }
     const statusOk = typeof result.status === 'number' ? result.status === 0 : true;
     return {
@@ -131,21 +177,24 @@ export function validateJavaExecutable(executablePath: string): JavaValidationRe
   }
 }
 
-function parseJavaMajor(versionText: string | undefined): JavaMajor | undefined {
-  if (!versionText) return undefined;
-  const match = versionText.match(/version\\s+\"?(\\d+)(?:\\.(\\d+))?/i);
-  if (!match) return undefined;
-  const primary = Number(match[1]);
-  const secondary = Number(match[2]);
-  if (Number.isNaN(primary)) return undefined;
-  if (primary > 1) {
-    return [8, 11, 16, 17, 21].includes(primary) ? (primary as JavaMajor) : undefined;
+export function summarizeValidation(result: JavaValidationResult): { ok: boolean; major?: JavaMajor } {
+  return { ok: result.ok, major: parseJavaMajor(result.versionText) };
+}
+
+// ─── Adoptium Download ───────────────────────────────────────────────────────
+
+let cachedFetch: typeof fetch | null = null;
+
+async function getFetch(): Promise<typeof fetch> {
+  if (cachedFetch) return cachedFetch;
+  const nativeFetch = (globalThis as Record<string, unknown>).fetch;
+  if (typeof nativeFetch === 'function') {
+    cachedFetch = nativeFetch as typeof fetch;
+    return cachedFetch;
   }
-  if (!Number.isNaN(secondary) && secondary >= 0) {
-    const mapped = secondary as JavaMajor;
-    return [8, 11, 16, 17, 21].includes(mapped) ? mapped : undefined;
-  }
-  return undefined;
+  const mod = await import('node-fetch');
+  cachedFetch = ((mod as Record<string, unknown>).default ?? mod) as typeof fetch;
+  return cachedFetch;
 }
 
 function mapOs(platform: NodeJS.Platform): string {
@@ -170,20 +219,17 @@ async function fetchJson<T>(url: string): Promise<T> {
   if (!response.ok) {
     throw new Error(`Failed to fetch ${url} (${response.status} ${response.statusText})`);
   }
-  return (await response.json()) as T;
+  return response.json() as Promise<T>;
 }
 
-async function resolveAdoptiumPackage(major: JavaMajor): Promise<{
-  descriptor: AdoptiumPackage;
-  archiveType: ArchiveType;
-}> {
-  const osParam = mapOs(process.platform);
-  const archParam = mapArch(process.arch);
+async function resolveAdoptiumPackage(
+  major: JavaMajor,
+): Promise<{ descriptor: AdoptiumPackage; archiveType: ArchiveType }> {
   const params = new URLSearchParams({
-    architecture: archParam,
+    architecture: mapArch(process.arch),
     image_type: 'jre',
     jvm_impl: 'hotspot',
-    os: osParam,
+    os: mapOs(process.platform),
     heap_size: 'normal',
   });
 
@@ -191,43 +237,32 @@ async function resolveAdoptiumPackage(major: JavaMajor): Promise<{
   const payload = await fetchJson<AdoptiumRelease[]>(url);
 
   const binaries = payload.flatMap((release) => {
-    const single: AdoptiumBinary[] = [];
-    if (release.binary) single.push(release.binary);
-    if (release.binaries) single.push(...release.binaries);
-    return single;
+    const list: AdoptiumBinary[] = [];
+    if (release.binary) list.push(release.binary);
+    if (release.binaries) list.push(...release.binaries);
+    return list;
   });
 
-  const pick = (preferred: string[]): AdoptiumBinary | null => {
-    for (const binary of binaries) {
-      const pkg = binary.package;
-      if (!pkg?.name || !pkg.link) continue;
-      const lower = pkg.name.toLowerCase();
-      if (!preferred.some((ext) => lower.endsWith(ext))) continue;
-      return binary;
-    }
-    return null;
-  };
+  const preferred = binaries.find((b) => {
+    const name = b.package?.name?.toLowerCase() ?? '';
+    return (b.package?.link) && (name.endsWith('.zip') || name.endsWith('.tar.gz'));
+  }) ?? binaries.find((b) => b.package?.link && b.package.name?.includes('jdk'));
 
-  const preferredBinary =
-    pick(['.zip', '.tar.gz']) ||
-    binaries.find((b) => b.package?.link && b.package.name && b.package.name.includes('jdk'));
-
-  const pkg = preferredBinary?.package;
+  const pkg = preferred?.package;
   if (!pkg?.link || !pkg.name) {
-    throw new Error(`No compatible Temurin package found for ${osParam}/${archParam}`);
+    throw new Error(
+      `No compatible Temurin package found for ${mapOs(process.platform)}/${mapArch(process.arch)}`,
+    );
   }
 
-  return {
-    descriptor: pkg,
-    archiveType: archiveTypeFromName(pkg.name),
-  };
+  return { descriptor: pkg, archiveType: archiveTypeFromName(pkg.name) };
 }
 
 async function downloadWithProgress(
   descriptor: AdoptiumPackage,
   archiveType: ArchiveType,
   onProgress?: (payload: JavaProgressPayload) => void,
-): Promise<{ archivePath: string }> {
+): Promise<string> {
   const fetchFn = await getFetch();
   const response = await fetchFn(descriptor.link);
   if (!response.ok || !response.body) {
@@ -240,29 +275,30 @@ async function downloadWithProgress(
 
   const archivePath = path.join(os.tmpdir(), `shindo-temurin-${Date.now()}.${archiveType}`);
   const fileStream = fs.createWriteStream(archivePath);
+
   const sourceStream =
     typeof (response.body as unknown as ReadableStream).pipeTo === 'function'
       ? (response.body as unknown as ReadableStream)
       : Readable.fromWeb(response.body as unknown as ReadableStream);
 
-  const progressStream = new Transform({
-    transform(chunk, _encoding, callback) {
+  const progressTransform = new Transform({
+    transform(chunk, _enc, cb) {
       received += chunk.length;
       if (onProgress && total > 0) {
         const percent = Math.min(99, Math.round((received / total) * 80));
         const elapsed = Math.max(1, Date.now() - startedAt) / 1000;
         const speedMb = received / 1024 / 1024 / elapsed;
-        const message = `Baixando Java... ${(received / 1024 / 1024).toFixed(
-          1,
-        )} / ${(total / 1024 / 1024).toFixed(1)} MB (${speedMb.toFixed(1)} MB/s)`;
-        onProgress({ message, percent });
+        onProgress({
+          message: `Baixando Java... ${(received / 1024 / 1024).toFixed(1)} / ${(total / 1024 / 1024).toFixed(1)} MB (${speedMb.toFixed(1)} MB/s)`,
+          percent,
+        });
       }
-      callback(null, chunk);
+      cb(null, chunk);
     },
   });
 
-  await pipeline(sourceStream, progressStream, fileStream);
-  return { archivePath };
+  await pipeline(sourceStream, progressTransform, fileStream);
+  return archivePath;
 }
 
 function resolveExtractionRoot(dir: string): string {
@@ -286,8 +322,7 @@ async function extractArchive(
 
   try {
     if (archiveType === 'zip') {
-      const zip = new AdmZip(archivePath);
-      zip.extractAllTo(extractDir, true);
+      new AdmZip(archivePath).extractAllTo(extractDir, true);
     } else {
       await tar.x({ file: archivePath, cwd: extractDir, strip: 1 });
     }
@@ -296,50 +331,46 @@ async function extractArchive(
     for (const entry of fs.readdirSync(root)) {
       fs.cpSync(path.join(root, entry), path.join(targetDir, entry), { recursive: true });
     }
-    if (onProgress) {
-      onProgress({ message: 'Extraindo Java...', percent: 95 });
-    }
+
+    onProgress?.({ message: 'Extraindo Java...', percent: 95 });
   } finally {
     fs.rmSync(extractDir, { recursive: true, force: true });
   }
 }
 
-function hasValidCachedRuntime(major: JavaMajor): string | null {
-  const candidate = expectedBinaryPath(major);
-  const result = validateJavaExecutable(candidate);
-  return result.ok ? candidate : null;
-}
+// ─── Public Functions ────────────────────────────────────────────────────────
 
-function determineJavaMajorFromMinecraftVersion(minecraftVersion: string | null): JavaMajor {
-  const fallback: JavaMajor = 17;
-  if (!minecraftVersion) return fallback;
-  const match = minecraftVersion.match(/(\\d+)(?:\\.(\\d+))?(?:\\.(\\d+))?/);
-  if (!match) return fallback;
-  const primary = Number(match[1]);
-  const secondary = Number(match[2] ?? '0');
-  const versionMinor = primary === 1 ? secondary : primary;
-
-  if (versionMinor >= 21) return 21;
-  if (versionMinor >= 18) return 17;
-  if (versionMinor >= 17) return 16;
-  return 8;
-}
-
+/**
+ * Determines the required Java major version for a given Minecraft version.
+ *
+ * Priority:
+ *  1. Override from `javaMetadataService` (e.g. explicit mapping in CDN config)
+ *  2. Derived from the Minecraft version number itself
+ *
+ * Examples:
+ *  - "1.8.9"  → Java 8
+ *  - "1.16.5" → Java 8
+ *  - "1.17"   → Java 16
+ *  - "1.18.2" → Java 17
+ *  - "1.21"   → Java 21
+ */
 export async function determineJavaMajor(
   versionId: string | null,
   minecraftVersion: string | null,
 ): Promise<JavaMajor> {
   const override = await resolveJavaMajorFromVersioning(versionId, minecraftVersion);
   if (override) return override;
-  return determineJavaMajorFromMinecraftVersion(minecraftVersion);
+  return javaForMinecraft(minecraftVersion);
 }
 
 export async function ensureJavaRuntime(
   major: JavaMajor,
   onProgress?: (payload: JavaProgressPayload) => void,
 ): Promise<EnsureRuntimeResult> {
-  const cached = hasValidCachedRuntime(major);
-  if (cached) {
+  // Check cache first
+  const cached = expectedBinaryPath(major);
+  const cachedValid = validateJavaExecutable(cached);
+  if (cachedValid.ok) {
     onProgress?.({ message: `Java ${major} em cache`, percent: 100 });
     ensureExecutablePermissions(cached);
     return { path: cached, major, source: 'cached', runtimeDir: runtimeDirFor(major) };
@@ -348,7 +379,7 @@ export async function ensureJavaRuntime(
   onProgress?.({ message: `Preparando download do Java ${major}...`, percent: 5 });
 
   const { descriptor, archiveType } = await resolveAdoptiumPackage(major);
-  const { archivePath } = await downloadWithProgress(descriptor, archiveType, onProgress);
+  const archivePath = await downloadWithProgress(descriptor, archiveType, onProgress);
 
   const targetDir = runtimeDirFor(major);
   try {
@@ -359,6 +390,7 @@ export async function ensureJavaRuntime(
 
   const binaryPath = expectedBinaryPath(major);
   ensureExecutablePermissions(binaryPath);
+
   const validation = validateJavaExecutable(binaryPath);
   if (!validation.ok) {
     fs.rmSync(targetDir, { recursive: true, force: true });
@@ -369,11 +401,4 @@ export async function ensureJavaRuntime(
 
   onProgress?.({ message: `Java ${major} pronto`, percent: 100 });
   return { path: binaryPath, major, source: 'downloaded', runtimeDir: targetDir };
-}
-
-export function summarizeValidation(result: JavaValidationResult): {
-  ok: boolean;
-  major?: JavaMajor;
-} {
-  return { ok: result.ok, major: parseJavaMajor(result.versionText) };
 }

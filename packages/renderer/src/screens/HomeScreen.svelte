@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { AccountProfile, LauncherConfig, VersionCatalogEntry } from '@shindo/shared';
+  import type { AccountProfile, LauncherConfig, VersionCatalogEntry, VersionBuildCatalogEntry } from '@shindo/shared';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import ChevronUp from 'lucide-svelte/icons/chevron-up';
   import Plus from 'lucide-svelte/icons/plus';
@@ -58,6 +58,30 @@
     return `SHINDO ${entry.minecraftVersion}`;
   }
 
+  function getBuildTypeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      stable: 'STABLE',
+      snapshot: 'SNAPSHOT',
+      dev: 'DEV',
+      legacy: 'LEGACY',
+    };
+    return labels[type] || type.toUpperCase();
+  }
+
+  function getBuildTypeColor(type: string): string {
+    const colors: Record<string, string> = {
+      stable: '#22c55e',
+      snapshot: '#f59e0b',
+      dev: '#ef4444',
+      legacy: '#8b5cf6',
+    };
+    return colors[type] || '#6366f1';
+  }
+
+  function makeBuildDisplayLabel(build: VersionBuildCatalogEntry): string {
+    return `${build.semver} (${build.buildId}-${build.type})`;
+  }
+
   function cardBackground(entry: VersionCatalogEntry): string {
     const gradient = 'linear-gradient(135deg, rgba(17, 24, 39, 0.55), rgba(2, 6, 23, 0.9))';
     const img = entry.bannerUrl || bannerUrl;
@@ -77,6 +101,9 @@
     null;
   $: selectedBuildValue = config?.selectedBuild ?? null;
   $: buildOptions = selectedVersionMeta?.builds ?? [];
+  $: filteredBuildOptions = selectedBuildType === 'all'
+    ? buildOptions
+    : buildOptions.filter((b) => b.type === selectedBuildType);
   $: selectedBuildOption =
     buildOptions.find((entry) => entry.build === selectedBuildValue) || buildOptions[0] || null;
   $: versionBannerBackground = selectedVersionMeta?.bannerUrl || bannerUrl;
@@ -89,6 +116,7 @@
   let addPanelMode: 'options' | 'offline' = 'options';
   let offlineName = '';
   let removeConfirmId: string | null = null;
+  let selectedBuildType: 'stable' | 'snapshot' | 'dev' | 'all' = 'all';
 
   onMount(() => {
     const handleClick = (event: MouseEvent) => {
@@ -684,6 +712,113 @@
     outline: none;
   }
 
+  .version-type-tabs {
+    display: flex;
+    gap: 6px;
+  }
+
+  .type-tab {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    color: #9ca3af;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .type-tab:hover {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(148, 163, 184, 0.45);
+    color: #e5e7eb;
+  }
+
+  .type-tab.active {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: #6366f1;
+    color: #6366f1;
+  }
+
+  .type-tab.stable.active {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: #22c55e;
+    color: #22c55e;
+  }
+
+  .type-tab.snapshot.active {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: #f59e0b;
+    color: #f59e0b;
+  }
+
+  .type-tab.dev.active {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #ef4444;
+  }
+
+  .build-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .build-card {
+    position: relative;
+    background: rgba(15, 23, 42, 0.7);
+    border: 2px solid rgba(148, 163, 184, 0.2);
+    border-radius: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .build-card:hover {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: var(--type-color, #6366f1);
+    transform: translateY(-1px);
+  }
+
+  .build-card.selected {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: var(--type-color, #6366f1);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+  }
+
+  .build-card-type {
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--type-color, #6366f1);
+  }
+
+  .build-card-version {
+    font-size: 16px;
+    font-weight: 800;
+    color: #f9fafb;
+  }
+
+  .build-card-id {
+    font-size: 11px;
+    font-weight: 600;
+    color: #9ca3af;
+  }
+
+  .build-card-label {
+    font-size: 11px;
+    color: #6b7280;
+  }
+
   .version-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1039,32 +1174,51 @@
       <div class="version-selector-panel">
         {#if selectedVersionMeta && selectedVersionMeta.builds.length > 0}
           <div class="version-build-toolbar">
-            <span class="version-build-label">Build</span>
-            <select
-              class="version-build-select"
-              value={selectedBuildOption?.build ?? ''}
-              on:change={handleBuildSelect}
-            >
-              {#each selectedVersionMeta.builds as build}
-                <option value={build.build}>
-                  {build.label} ({build.build})
-                </option>
-              {/each}
-            </select>
+            <span class="version-build-label">Filter</span>
+            <div class="version-type-tabs">
+              <button
+                type="button"
+                class={`type-tab ${selectedBuildType === 'all' ? 'active' : ''}`}
+                on:click={() => (selectedBuildType = 'all')}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                class={`type-tab stable ${selectedBuildType === 'stable' ? 'active' : ''}`}
+                on:click={() => (selectedBuildType = 'stable')}
+              >
+                Stable
+              </button>
+              <button
+                type="button"
+                class={`type-tab snapshot ${selectedBuildType === 'snapshot' ? 'active' : ''}`}
+                on:click={() => (selectedBuildType = 'snapshot')}
+              >
+                Snapshot
+              </button>
+              <button
+                type="button"
+                class={`type-tab dev ${selectedBuildType === 'dev' ? 'active' : ''}`}
+                on:click={() => (selectedBuildType = 'dev')}
+              >
+                Dev
+              </button>
+            </div>
           </div>
         {/if}
-        <div class="version-grid">
-          {#each versionCards as version, index}
+        <div class="build-grid">
+          {#each filteredBuildOptions as build}
             <button
               type="button"
-              class={`version-card ${selectedVersionId === version.id ? 'selected' : ''}`}
-              style={`background-image: ${cardBackground(version)}; --card-idx:${index};`}
-              on:click={() => handleVersionSelect(version.id)}
+              class={`build-card ${selectedBuildValue === build.build ? 'selected' : ''}`}
+              style={`--type-color: ${getBuildTypeColor(build.type)};`}
+              on:click={() => applyConfigPatch({ selectedBuild: build.build })}
             >
-              <span class="version-card-label">{makeVersionLabel(version)}</span>
-              {#if version.latestBuild}
-                <span class="version-card-build">BUILD {version.latestBuild}</span>
-              {/if}
+              <span class="build-card-type">{getBuildTypeLabel(build.type)}</span>
+              <span class="build-card-version">{build.semver}</span>
+              <span class="build-card-id">{build.buildId}</span>
+              <span class="build-card-label">{build.label}</span>
             </button>
           {/each}
         </div>
@@ -1080,7 +1234,7 @@
         <span class="version-banner-meta">
           MC {selectedVersionMeta?.minecraftVersion || selectedVersionPresentation.baseVersion}
           {#if selectedBuildOption}
-            {' · '}BUILD {selectedBuildOption.build}
+            {' · '}{selectedBuildOption.semver} ({selectedBuildOption.buildId}-{selectedBuildOption.type})
           {/if}
         </span>
       </div>

@@ -3,16 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import semver from 'semver';
-import {
-  autoUpdater,
-  type UpdateCheckResult,
-} from 'electron-updater';
+import { autoUpdater, type UpdateCheckResult } from 'electron-updater';
 import type { LauncherUpdateInfoPayload, LauncherUpdateResultPayload } from '@shindo/shared';
 import {
   downloadAsset,
   fetchLatestRelease,
-  GitHubAsset,
-  GitHubRelease,
+  type GitHubAsset,
+  type GitHubRelease,
   GitHubHttpError,
 } from './githubClient';
 import { getLauncherUpdateDir } from '../utils/pathResolver';
@@ -32,6 +29,8 @@ import {
   setupAutoUpdaterProgressHooks,
 } from './launcherUpdater/progress';
 
+// ─── State ────────────────────────────────────────────────────────────────────
+
 let updaterConfigured = false;
 let lastCheckResult: UpdateCheckResult | null = null;
 let lastDownloadedPath: string | null = null;
@@ -40,52 +39,14 @@ let lastDownloadUsedAutoUpdater = false;
 setupAutoUpdaterProgressHooks();
 export { onLauncherDownloadProgress };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function getRepo(): string {
   return distributionConfig.launcher.githubRepo;
 }
 
-function configureAutoUpdater(): boolean {
-  if (!app.isPackaged) {
-    return false;
-  }
-
-  if (updaterConfigured) {
-    return true;
-  }
-
-  try {
-    const repo = getRepo();
-    const [owner, repoName] = repo.split('/', 2);
-
-    if (!owner || !repoName) {
-      return false;
-    }
-
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = false;
-    autoUpdater.fullChangelog = false;
-    autoUpdater.allowDowngrade = false;
-    autoUpdater.setFeedURL({
-      provider: 'github',
-      owner,
-      repo: repoName,
-      releaseType: 'release',
-    });
-
-    updaterConfigured = true;
-    return true;
-  } catch (error) {
-    updaterConfigured = false;
-    if (isIgnorableAutoUpdaterError(error)) {
-      return false;
-    }
-    throw error;
-  }
-}
-
 function normalizeVersion(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const coerced = semver.coerce(raw);
+  const coerced = semver.coerce(raw ?? '');
   return coerced ? coerced.version : null;
 }
 
@@ -93,46 +54,61 @@ function getCurrentVersion(): string | null {
   return normalizeVersion(app.getVersion() ?? null);
 }
 
-function isIgnorableAutoUpdaterError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  const message = error.message?.toLowerCase?.() ?? '';
-  return (
-    message.includes('update check failed') ||
-    message.includes('auto-updater not supported') ||
-    message.includes('electron-updater does not support') ||
-    message.includes('app is not ready') ||
-    message.includes('error: connect') ||
-    message.includes('must be packaged') ||
-    message.includes('cannot find latest') ||
-    message.includes('no cached update') ||
-    message.includes('channel is not specified') ||
-    message.includes('http error')
-  );
+function isIgnorableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message?.toLowerCase() ?? '';
+  return [
+    'update check failed',
+    'auto-updater not supported',
+    'electron-updater does not support',
+    'app is not ready',
+    'error: connect',
+    'must be packaged',
+    'cannot find latest',
+    'no cached update',
+    'channel is not specified',
+    'http error',
+  ].some((s) => msg.includes(s));
 }
 
-async function checkWithAutoUpdater(): Promise<LauncherUpdateInfoPayload | null> {
-  if (!configureAutoUpdater()) {
-    return null;
+function configureAutoUpdater(): boolean {
+  if (!app.isPackaged) return false;
+  if (updaterConfigured) return true;
+
+  try {
+    const [owner, repoName] = getRepo().split('/', 2);
+    if (!owner || !repoName) return false;
+
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.fullChangelog = false;
+    autoUpdater.allowDowngrade = false;
+    autoUpdater.setFeedURL({ provider: 'github', owner, repo: repoName, releaseType: 'release' });
+
+    updaterConfigured = true;
+    return true;
+  } catch (error) {
+    updaterConfigured = false;
+    if (isIgnorableError(error)) return false;
+    throw error;
   }
+}
+
+// ─── Check for Updates ────────────────────────────────────────────────────────
+
+async function checkWithAutoUpdater(): Promise<LauncherUpdateInfoPayload | null> {
+  if (!configureAutoUpdater()) return null;
 
   try {
     const result = await autoUpdater.checkForUpdates();
-    if (!result || !result.updateInfo) {
+    if (!result?.updateInfo) {
       lastDownloadedPath = null;
       lastDownloadUsedAutoUpdater = false;
-      return {
-        updateAvailable: false,
-        currentVersion: getCurrentVersion(),
-        latestVersion: null,
-        release: undefined,
-        asset: null,
-      };
+      return { updateAvailable: false, currentVersion: getCurrentVersion(), latestVersion: null, release: undefined, asset: null };
     }
 
     lastCheckResult = result;
-    const updateInfo = result.updateInfo;
+    const { updateInfo } = result;
     const latestVersion = normalizeVersion(updateInfo.version);
     const currentVersion = getCurrentVersion();
     const updateAvailable =
@@ -140,71 +116,55 @@ async function checkWithAutoUpdater(): Promise<LauncherUpdateInfoPayload | null>
         ? semver.gt(latestVersion, currentVersion)
         : result.isUpdateAvailable;
 
-    const release = mapReleaseFromUpdateInfo(updateInfo);
-    const asset = mapAssetFromFile(pickFileForPlatform(updateInfo.files));
-
     return {
       updateAvailable: Boolean(updateAvailable),
       currentVersion,
       latestVersion: latestVersion ?? updateInfo.version ?? null,
-      release,
-      asset,
+      release: mapReleaseFromUpdateInfo(updateInfo),
+      asset: mapAssetFromFile(pickFileForPlatform(updateInfo.files)),
     };
   } catch (error) {
-    if (isIgnorableAutoUpdaterError(error)) {
-      return null;
-    }
+    if (isIgnorableError(error)) return null;
     throw error;
   }
 }
 
 async function checkWithGitHubFallback(): Promise<LauncherUpdateInfoPayload> {
-  const repo = getRepo();
   const current = getCurrentVersion();
-
   let release: GitHubRelease;
+
   try {
-    release = await fetchLatestRelease(repo);
+    release = await fetchLatestRelease(getRepo());
   } catch (error) {
     if (error instanceof GitHubHttpError && error.status === 404) {
-      return {
-        updateAvailable: false,
-        currentVersion: current,
-        latestVersion: null,
-        release: undefined,
-        asset: null,
-      };
+      return { updateAvailable: false, currentVersion: current, latestVersion: null, release: undefined, asset: null };
     }
     throw error;
   }
 
   const latestRaw = release.tag_name ?? release.name;
   const latest = normalizeVersion(latestRaw);
-  const currentVersion = current;
-
   const updateAvailable =
-    latest && currentVersion
-      ? semver.gt(latest, currentVersion)
-      : latestRaw !== undefined && latestRaw !== currentVersion;
+    latest && current
+      ? semver.gt(latest, current)
+      : latestRaw !== undefined && latestRaw !== current;
 
   return {
     updateAvailable: Boolean(updateAvailable),
-    currentVersion,
+    currentVersion: current,
     latestVersion: latest ?? latestRaw,
     release: mapRelease(release),
     asset: mapAsset(pickAssetForPlatform(release.assets ?? [])),
   };
 }
 
+// ─── Download Update ──────────────────────────────────────────────────────────
+
 async function downloadWithAutoUpdater(): Promise<LauncherUpdateResultPayload | null> {
-  if (!configureAutoUpdater()) {
-    return null;
-  }
+  if (!configureAutoUpdater()) return null;
 
   const currentInfo = await checkWithAutoUpdater();
-  if (!currentInfo) {
-    return null;
-  }
+  if (!currentInfo) return null;
 
   if (!currentInfo.updateAvailable) {
     lastDownloadUsedAutoUpdater = false;
@@ -218,7 +178,7 @@ async function downloadWithAutoUpdater(): Promise<LauncherUpdateResultPayload | 
   }
 
   const result = lastCheckResult ?? (await autoUpdater.checkForUpdates());
-  if (!result || !result.updateInfo || !result.isUpdateAvailable) {
+  if (!result?.updateInfo || !result.isUpdateAvailable) {
     lastDownloadedPath = null;
     lastDownloadUsedAutoUpdater = false;
     return {
@@ -233,7 +193,7 @@ async function downloadWithAutoUpdater(): Promise<LauncherUpdateResultPayload | 
   try {
     const files = await autoUpdater.downloadUpdate(result.cancellationToken);
     const downloadedPath = files?.[0] ?? null;
-    lastDownloadedPath = downloadedPath ?? null;
+    lastDownloadedPath = downloadedPath;
     lastDownloadUsedAutoUpdater = downloadedPath !== null;
     return {
       updateAvailable: true,
@@ -245,51 +205,37 @@ async function downloadWithAutoUpdater(): Promise<LauncherUpdateResultPayload | 
     };
   } catch (error) {
     lastDownloadUsedAutoUpdater = false;
-    if (isIgnorableAutoUpdaterError(error)) {
-      return null;
-    }
+    if (isIgnorableError(error)) return null;
     throw error;
   }
 }
 
 async function downloadWithGitHubFallback(): Promise<LauncherUpdateResultPayload> {
   const info = await checkWithGitHubFallback();
-  const { updateAvailable, latestVersion, asset, release, currentVersion } = info;
 
-  if (!updateAvailable || !asset) {
+  if (!info.updateAvailable || !info.asset) {
     lastDownloadedPath = null;
     lastDownloadUsedAutoUpdater = false;
-    return {
-      updateAvailable: false,
-      latestVersion,
-      currentVersion,
-      release,
-      asset: null,
-    };
+    return { updateAvailable: false, latestVersion: info.latestVersion, currentVersion: info.currentVersion, release: info.release, asset: null };
   }
 
   const latestRelease = await fetchLatestRelease(getRepo());
   const rawAsset = pickAssetForPlatform(latestRelease.assets ?? []);
 
   if (!rawAsset) {
-    return {
-      updateAvailable: false,
-      latestVersion,
-      currentVersion,
-      release,
-      asset: null,
-    };
+    return { updateAvailable: false, latestVersion: info.latestVersion, currentVersion: info.currentVersion, release: info.release, asset: null };
   }
 
-  const downloadedPath = await downloadAssetToCache(rawAsset, latestVersion);
+  const downloadedPath = await downloadAssetToCache(rawAsset, info.latestVersion);
   lastDownloadedPath = downloadedPath;
   lastDownloadUsedAutoUpdater = false;
+
   return {
     updateAvailable: true,
-    latestVersion,
-    currentVersion,
-    asset,
-    release,
+    latestVersion: info.latestVersion,
+    currentVersion: info.currentVersion,
+    asset: info.asset,
+    release: info.release,
     downloadedPath,
   };
 }
@@ -297,112 +243,85 @@ async function downloadWithGitHubFallback(): Promise<LauncherUpdateResultPayload
 async function downloadAssetToCache(asset: GitHubAsset, version?: string | null): Promise<string> {
   const updateDir = path.join(getLauncherUpdateDir(), version || 'latest');
   await fs.promises.mkdir(updateDir, { recursive: true });
+
   const destination = path.join(updateDir, asset.name);
   const stream = await downloadAsset(asset.browser_download_url);
   const total = asset.size ?? 0;
   let transferred = 0;
 
-  notifyProgress({
-    percent: 0,
-    transferred: 0,
-    total,
-    bytesPerSecond: 0,
-  });
+  notifyProgress({ percent: 0, transferred: 0, total, bytesPerSecond: 0 });
 
   stream.on('data', (chunk: Buffer) => {
     transferred += chunk.length;
     const effectiveTotal = total > 0 ? total : transferred;
-    const percent = effectiveTotal > 0 ? Math.min(100, (transferred / effectiveTotal) * 100) : 0;
     notifyProgress({
-      percent,
+      percent: effectiveTotal > 0 ? Math.min(100, (transferred / effectiveTotal) * 100) : 0,
       transferred,
       total: effectiveTotal,
     });
   });
 
   await pipeline(stream, fs.createWriteStream(destination));
-
-  const finalTotal = total > 0 ? total : transferred;
-  notifyProgress({
-    percent: 100,
-    transferred: finalTotal,
-    total: finalTotal,
-  });
+  notifyProgress({ percent: 100, transferred: total || transferred, total: total || transferred });
 
   return destination;
 }
 
-export async function checkLauncherUpdate(): Promise<LauncherUpdateInfoPayload> {
-  if (!app.isPackaged) {
-    const version = getCurrentVersion();
-    lastDownloadedPath = null;
-    return {
-      updateAvailable: false,
-      currentVersion: version,
-      latestVersion: version,
-      release: undefined,
-      asset: null,
-    };
-  }
+// ─── Public API ───────────────────────────────────────────────────────────────
 
-  const autoUpdaterResult = await checkWithAutoUpdater();
-  if (autoUpdaterResult) {
-    return autoUpdaterResult;
-  }
-  return checkWithGitHubFallback();
+function notPackagedResult(): LauncherUpdateInfoPayload {
+  const version = getCurrentVersion();
+  lastDownloadedPath = null;
+  return { updateAvailable: false, currentVersion: version, latestVersion: version, release: undefined, asset: null };
+}
+
+export async function checkLauncherUpdate(): Promise<LauncherUpdateInfoPayload> {
+  if (!app.isPackaged) return notPackagedResult();
+  return (await checkWithAutoUpdater()) ?? checkWithGitHubFallback();
 }
 
 export async function ensureLauncherUpdate(): Promise<LauncherUpdateResultPayload> {
   if (!app.isPackaged) {
     const version = getCurrentVersion();
     lastDownloadedPath = null;
-    return {
-      updateAvailable: false,
-      currentVersion: version,
-      latestVersion: version,
-      release: undefined,
-      asset: null,
-    };
+    return { updateAvailable: false, currentVersion: version, latestVersion: version, release: undefined, asset: null };
   }
-
-  const autoResult = await downloadWithAutoUpdater();
-  if (autoResult) {
-    return autoResult;
-  }
-  return downloadWithGitHubFallback();
+  return (await downloadWithAutoUpdater()) ?? downloadWithGitHubFallback();
 }
 
 export async function applyLauncherUpdate(downloadedPath?: string | null): Promise<boolean> {
   const targetPath = downloadedPath ?? lastDownloadedPath;
 
-  try {
-    if (lastDownloadUsedAutoUpdater && configureAutoUpdater()) {
-      console.info('Applying launcher update via autoUpdater.quitAndInstall()');
+  // Try electron-updater first (packaged apps)
+  if (lastDownloadUsedAutoUpdater && configureAutoUpdater()) {
+    try {
+      console.info('[LAUNCHER_UPDATE] Applying via autoUpdater.quitAndInstall()');
       autoUpdater.quitAndInstall();
       return true;
-    }
-  } catch (error) {
-    if (!isIgnorableAutoUpdaterError(error)) {
-      console.error('Failed to apply launcher update via autoUpdater', error);
+    } catch (error) {
+      if (!isIgnorableError(error)) {
+        console.error('[LAUNCHER_UPDATE] Failed to apply via autoUpdater', error);
+      }
     }
   }
 
+  // Fall back to opening installer file
   if (targetPath) {
     try {
       if (!fs.existsSync(targetPath)) {
-        console.error('Launcher installer not found at', targetPath);
+        console.error('[LAUNCHER_UPDATE] Installer not found at', targetPath);
         return false;
       }
-      console.info('Launching launcher installer at', targetPath);
+      console.info('[LAUNCHER_UPDATE] Launching installer at', targetPath);
       const result = await shell.openPath(targetPath);
-      if (result && result.trim().length > 0) {
-        console.error('Failed to launch installer:', result);
+      if (result?.trim()) {
+        console.error('[LAUNCHER_UPDATE] Failed to launch installer:', result);
         return false;
       }
       app.quit();
       return true;
     } catch (error) {
-      console.error('Failed to launch launcher installer', error);
+      console.error('[LAUNCHER_UPDATE] Failed to launch installer', error);
       return false;
     }
   }

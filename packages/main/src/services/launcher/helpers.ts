@@ -7,8 +7,11 @@ import type { LauncherConfig, MemoryOptions } from '@shindo/shared';
 import { downloadAsset } from '../githubClient';
 import { getBaseDataDir } from '../../utils/pathResolver';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const LAUNCHWRAPPER_URL =
   'https://libraries.minecraft.net/net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar';
+
 const REQUIRED_LIBRARIES = [
   {
     relativePath: 'org/ow2/asm/asm-all/5.0.3/asm-all-5.0.3.jar',
@@ -16,45 +19,28 @@ const REQUIRED_LIBRARIES = [
   },
 ];
 
-export async function ensureLaunchWrapperJar(root: string): Promise<void> {
-  const jarPath = path.join(
-    root,
-    'libraries',
-    'net',
-    'minecraft',
-    'launchwrapper',
-    '1.12',
-    'launchwrapper-1.12.jar',
-  );
-  try {
-    const stats = fs.statSync(jarPath);
-    if (stats.size > 0) {
-      return;
-    }
-  } catch {
-    // ignore and download
-  }
+// ─── Library Helpers ──────────────────────────────────────────────────────────
 
-  fs.mkdirSync(path.dirname(jarPath), { recursive: true });
-  const stream = await downloadAsset(LAUNCHWRAPPER_URL);
-  await pipeline(stream, fs.createWriteStream(jarPath));
+async function downloadIfMissing(url: string, dest: string): Promise<void> {
+  try {
+    if (fs.statSync(dest).size > 0) return;
+  } catch {
+    // File missing or unreadable — download it
+  }
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  const stream = await downloadAsset(url);
+  await pipeline(stream, fs.createWriteStream(dest));
+}
+
+export async function ensureLaunchWrapperJar(root: string): Promise<void> {
+  const dest = path.join(root, 'libraries', 'net', 'minecraft', 'launchwrapper', '1.12', 'launchwrapper-1.12.jar');
+  await downloadIfMissing(LAUNCHWRAPPER_URL, dest);
 }
 
 export async function ensureRequiredLibraries(root: string): Promise<void> {
   for (const { relativePath, url } of REQUIRED_LIBRARIES) {
-    const libPath = path.join(root, 'libraries', ...relativePath.split('/'));
-    try {
-      const stats = fs.statSync(libPath);
-      if (stats.size > 0) {
-        continue;
-      }
-    } catch {
-      // need to download
-    }
-
-    fs.mkdirSync(path.dirname(libPath), { recursive: true });
-    const stream = await downloadAsset(url);
-    await pipeline(stream, fs.createWriteStream(libPath));
+    const dest = path.join(root, 'libraries', ...relativePath.split('/'));
+    await downloadIfMissing(url, dest);
   }
 }
 
@@ -64,25 +50,26 @@ export function ensureDataRoot(): string {
   return root;
 }
 
-export function resolveMemory(config: LauncherConfig, memory?: MemoryOptions): Required<MemoryOptions> {
-  const maxFromConfig = `${Math.max(1, config.ramGB)}G`;
+// ─── Launch Config ────────────────────────────────────────────────────────────
+
+export function resolveMemory(
+  config: LauncherConfig,
+  memory?: MemoryOptions,
+): Required<MemoryOptions> {
   return {
     min: memory?.min ?? '1G',
-    max: memory?.max ?? maxFromConfig,
+    max: memory?.max ?? `${Math.max(1, config.ramGB)}G`,
   };
 }
 
 export function parseJvmArgs(args?: string): string[] {
   if (!args) return [];
-  const tokens = args.match(/"[^"]+"|\S+/g) ?? [];
-  return tokens.map((token) => token.replace(/^"(.*)"$/, '$1'));
+  return (args.match(/"[^"]+"|\S+/g) ?? []).map((t) => t.replace(/^"(.*)"$/, '$1'));
 }
+
+// ─── Authorization ────────────────────────────────────────────────────────────
 
 type AuthPayload = Awaited<ReturnType<typeof Authenticator.getAuth>>;
-
-function stripUuid(uuid: string): string {
-  return uuid.replace(/-/g, '');
-}
 
 export async function buildAuthorization(context: {
   accessToken?: string | null;
@@ -90,11 +77,13 @@ export async function buildAuthorization(context: {
   uuid: string;
   username: string;
 }): Promise<AuthPayload> {
+  const uuid = context.uuid.replace(/-/g, '');
+
   if (context.accessToken) {
     return {
       access_token: context.accessToken,
       client_token: context.clientToken,
-      uuid: stripUuid(context.uuid),
+      uuid,
       name: context.username,
       user_properties: {},
     } as AuthPayload;
@@ -105,16 +94,15 @@ export async function buildAuthorization(context: {
     ...offline,
     access_token: offline.access_token ?? context.accessToken ?? context.clientToken,
     client_token: context.clientToken,
-    uuid: stripUuid(context.uuid),
+    uuid,
     name: context.username,
     user_properties: offline.user_properties ?? {},
   } as AuthPayload;
 }
 
+// ─── Process Helpers ──────────────────────────────────────────────────────────
+
 export function extractCommand(proc: ChildProcessWithoutNullStreams | null): string[] {
   if (!proc) return [];
-  if (Array.isArray(proc.spawnargs) && proc.spawnargs.length > 0) {
-    return proc.spawnargs.map((arg) => String(arg));
-  }
-  return [];
+  return Array.isArray(proc.spawnargs) ? proc.spawnargs.map(String) : [];
 }

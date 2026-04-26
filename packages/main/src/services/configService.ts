@@ -3,7 +3,11 @@ import path from 'node:path';
 import type { JavaMajor, JavaSource, LauncherConfig } from '@shindo/shared';
 import { getBaseDataDir } from '../utils/pathResolver';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const CONFIG_FILE = path.join(getBaseDataDir(), 'config.json');
+
+const ALLOWED_JAVA_MAJORS: JavaMajor[] = [8, 11, 16, 17, 21];
 
 const DEFAULT_CONFIG: LauncherConfig = {
   ramGB: 4,
@@ -18,65 +22,68 @@ const DEFAULT_CONFIG: LauncherConfig = {
   language: 'en',
 };
 
+// ─── Normalization ────────────────────────────────────────────────────────────
+
 function normalizeJavaSource(value: unknown, hasCustomPath: boolean): JavaSource {
   if (value === 'custom') return 'custom';
   if (value === 'auto') return 'auto';
   return hasCustomPath ? 'custom' : 'auto';
 }
 
-const ALLOWED_JAVA_MAJORS: JavaMajor[] = [8, 11, 16, 17, 21];
-
-function normalizeJavaMajor(value: unknown): LauncherConfig['javaRuntimeMajor'] {
-  const asNumber = typeof value === 'number' ? value : Number(value);
-  return ALLOWED_JAVA_MAJORS.includes(asNumber as JavaMajor)
-    ? (asNumber as LauncherConfig['javaRuntimeMajor'])
-    : undefined;
+function normalizeJavaMajor(value: unknown): JavaMajor | undefined {
+  const n = typeof value === 'number' ? value : Number(value);
+  return ALLOWED_JAVA_MAJORS.includes(n as JavaMajor) ? (n as JavaMajor) : undefined;
 }
 
 function normalizeConfig(raw: Partial<LauncherConfig> & Record<string, unknown>): LauncherConfig {
-  const legacyPath = (raw as Record<string, unknown>).jrePath as string | undefined;
-  const customPath = raw.javaCustomPath ?? null;
+  const legacyPath = raw.jrePath as string | undefined;
+  const customPath = (raw.javaCustomPath as string | null | undefined) ?? null;
   const javaSource = normalizeJavaSource(raw.javaSource, Boolean(customPath));
   const javaPath =
-    raw.javaPath ?? (javaSource === 'custom' ? (customPath ?? null) : null) ?? legacyPath ?? null;
+    (raw.javaPath as string | null | undefined) ??
+    (javaSource === 'custom' ? customPath : null) ??
+    legacyPath ??
+    null;
 
   return {
     ...DEFAULT_CONFIG,
     ...raw,
     javaSource,
-    javaCustomPath: customPath ?? null,
-    javaPath: javaPath ?? null,
-    javaRuntimeMajor: normalizeJavaMajor(
-      raw.javaRuntimeMajor ?? (raw as Record<string, unknown>).javaVersion,
-    ),
+    javaCustomPath: customPath,
+    javaPath,
+    // Support legacy field name `javaVersion` alongside current `javaRuntimeMajor`
+    javaRuntimeMajor: normalizeJavaMajor(raw.javaRuntimeMajor ?? raw.javaVersion),
   };
 }
 
+// ─── Disk I/O ─────────────────────────────────────────────────────────────────
+
 function ensureConfigDir(): void {
-  const dir = path.dirname(CONFIG_FILE);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
 }
 
 function readConfigFromDisk(): LauncherConfig | null {
   try {
-    const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
-    const parsed = JSON.parse(raw) as Partial<LauncherConfig> & Record<string, unknown>;
+    const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) as Partial<LauncherConfig> & Record<string, unknown>;
     return normalizeConfig(parsed);
   } catch {
     return null;
   }
 }
 
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Loads config from disk. If not found, writes and returns defaults.
+ * Note: normalizes once on read — no double-normalization.
+ */
 export function loadConfig(): LauncherConfig {
   ensureConfigDir();
   const config = readConfigFromDisk();
-  if (config) {
-    const normalized = normalizeConfig(config as Partial<LauncherConfig> & Record<string, unknown>);
-    saveConfig(normalized);
-    return normalized;
-  }
+  if (config) return config;
+  // First run: write defaults
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf8');
-  return DEFAULT_CONFIG;
+  return { ...DEFAULT_CONFIG };
 }
 
 export function saveConfig(config: LauncherConfig): LauncherConfig {
@@ -86,10 +93,5 @@ export function saveConfig(config: LauncherConfig): LauncherConfig {
 }
 
 export function updateConfig(patch: Partial<LauncherConfig>): LauncherConfig {
-  const current = loadConfig();
-  const next: LauncherConfig = {
-    ...current,
-    ...patch,
-  };
-  return saveConfig(next);
+  return saveConfig({ ...loadConfig(), ...patch });
 }

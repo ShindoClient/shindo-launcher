@@ -1,165 +1,43 @@
 import { Readable } from 'node:stream';
 import { ReadableStream as WebReadableStream } from 'node:stream/web';
-import type {
-  VersionCatalogEntry,
-  VersionCatalogPayload,
-  VersionBuildCatalogEntry,
-} from '@shindo/shared';
+import type { VersionCatalogEntry, VersionCatalogPayload, VersionBuildCatalogEntry } from '@shindo/shared';
 import { distributionConfig, sanitizeVersionId } from '../config/distributionConfig';
+import { getFetch } from './fetchClient';
 
-type FetchResponse = {
-  ok: boolean;
-  status: number;
-  statusText: string;
-  body?: unknown;
-  text(): Promise<string>;
-  json(): Promise<unknown>;
-};
+// ─── Internal Types ───────────────────────────────────────────────────────────
 
-type FetchFn = (input: string, init?: Record<string, unknown>) => Promise<FetchResponse>;
+type JsonRecord = Record<string, unknown>;
 
-let cachedFetch: FetchFn | null = null;
-
-async function getFetch(): Promise<FetchFn> {
-  if (cachedFetch) return cachedFetch;
-
-  const nativeFetch = (globalThis as Record<string, unknown>).fetch;
-  if (typeof nativeFetch === 'function') {
-    cachedFetch = nativeFetch as FetchFn;
-    return cachedFetch;
-  }
-
-  const mod = await import('node-fetch');
-  const impl = (mod as Record<string, unknown>).default ?? mod;
-  cachedFetch = impl as FetchFn;
-  return cachedFetch;
-}
-
-function normalizePath(pathname: string): string {
-  if (!pathname.startsWith('/')) return `/${pathname}`;
-  return pathname;
-}
+// ─── URL Helpers ──────────────────────────────────────────────────────────────
 
 function toAbsoluteUrl(pathOrUrl: string): string {
   try {
-    const asUrl = new URL(pathOrUrl);
-    return asUrl.toString();
+    new URL(pathOrUrl);
+    return pathOrUrl;
   } catch {
-    return new URL(normalizePath(pathOrUrl), `${distributionConfig.client.cdnBaseUrl}/`).toString();
+    const normalized = pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`;
+    return new URL(normalized, `${distributionConfig.client.cdnBaseUrl}/`).toString();
   }
 }
+
+// ─── Value Coercions ──────────────────────────────────────────────────────────
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
-function pickByVersion(
-  record: Record<string, unknown>,
-  versionId: string,
-): Record<string, unknown> | null {
-  const direct = record[versionId];
-  if (direct && typeof direct === 'object') {
-    return direct as Record<string, unknown>;
-  }
-
-  const fallback = record.default;
-  if (fallback && typeof fallback === 'object') {
-    return fallback as Record<string, unknown>;
-  }
-
-  return null;
+function asNumber(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
-function normalizeEntry(
-  entry: Record<string, unknown>,
-  fallbackVersionId: string,
-): CdnClientVersionEntry | null {
-  const artifacts =
-    entry.artifacts && typeof entry.artifacts === 'object'
-      ? (entry.artifacts as Record<string, unknown>)
-      : null;
-
-  const versionId = asString(entry.id) || asString(entry.versionId) || fallbackVersionId;
-
-  const packageUrl =
-    asString(artifacts?.packageUrl) ||
-    asString(artifacts?.zipUrl) ||
-    asString(artifacts?.downloadUrl) ||
-    asString(entry.packageUrl) ||
-    asString(entry.zipUrl) ||
-    asString(entry.downloadUrl) ||
-    asString(entry.clientZip);
-
-  if (!packageUrl) {
-    return null;
-  }
-
-  return {
-    versionId: sanitizeVersionId(versionId),
-    buildVersion:
-      asString(entry.semver) ||
-      asString(entry.buildVersion) ||
-      asString(entry.build) ||
-      asString(entry.version) ||
-      asString(entry.clientVersion),
-    packageUrl: toAbsoluteUrl(packageUrl),
-    versionUrl:
-      asString(artifacts?.versionUrl) ||
-      asString(artifacts?.versionFileUrl) ||
-      asString(entry.versionUrl) ||
-      asString(entry.versionFileUrl),
-    baseVersion: asString(entry.baseVersion) || asString(entry.minecraftVersion),
-    assetsIndex: asString(entry.assetsIndex) || asString(entry.assets),
-    versionJsonPath: asString(artifacts?.versionJsonPath) || asString(entry.versionJsonPath),
-  };
-}
-
-function parseManifestObject(
-  manifest: Record<string, unknown>,
-  versionId: string,
-): CdnClientVersionEntry | null {
-  const versionsArray =
-    (manifest.versions && Array.isArray(manifest.versions) ? manifest.versions : null) ||
-    (manifest.clients && Array.isArray(manifest.clients) ? manifest.clients : null);
-
-  if (versionsArray) {
-    for (const item of versionsArray as Array<Record<string, unknown>>) {
-      if (!item || typeof item !== 'object') continue;
-      const itemId = asString(item.id) || asString(item.versionId);
-      if (itemId === versionId) {
-        const normalized = normalizeEntry(item, versionId);
-        if (normalized) return normalized;
-      }
-    }
-  }
-
-  if (
-    manifest.versions &&
-    typeof manifest.versions === 'object' &&
-    !Array.isArray(manifest.versions)
-  ) {
-    const versions = manifest.versions as Record<string, unknown>;
-    const candidate = pickByVersion(versions, versionId);
-    if (candidate) {
-      const normalized = normalizeEntry(candidate, versionId);
-      if (normalized) return normalized;
-    }
-  }
-
-  const direct = normalizeEntry(manifest, versionId);
-  if (direct) return direct;
-
-  return null;
-}
+// ─── Network ──────────────────────────────────────────────────────────────────
 
 async function requestJson(url: string): Promise<unknown | null> {
   try {
     const fetch = await getFetch();
     const response = await fetch(url);
-    if (!response.ok) {
-      return null;
-    }
-    return await response.json();
+    return response.ok ? response.json() : null;
   } catch {
     return null;
   }
@@ -169,12 +47,9 @@ async function readText(url: string): Promise<string | null> {
   try {
     const fetch = await getFetch();
     const response = await fetch(url);
-    if (!response.ok) {
-      return null;
-    }
-    const content = await response.text();
-    const trimmed = content.trim();
-    return trimmed.length > 0 ? trimmed : null;
+    if (!response.ok) return null;
+    const trimmed = (await response.text()).trim();
+    return trimmed || null;
   } catch {
     return null;
   }
@@ -186,18 +61,13 @@ export async function downloadFromUrl(url: string): Promise<NodeJS.ReadableStrea
   if (!response.ok || !response.body) {
     throw new Error(`Download failed (${response.status} ${response.statusText})`);
   }
-
   const body = response.body;
-  if (typeof (body as NodeJS.ReadableStream).pipe === 'function') {
-    return body as NodeJS.ReadableStream;
-  }
-
-  if (typeof (body as WebReadableStream).getReader === 'function') {
-    return Readable.fromWeb(body as WebReadableStream);
-  }
-
+  if (typeof (body as NodeJS.ReadableStream).pipe === 'function') return body as NodeJS.ReadableStream;
+  if (typeof (body as WebReadableStream).getReader === 'function') return Readable.fromWeb(body as WebReadableStream);
   throw new Error('Download failed: unsupported response body type');
 }
+
+// ─── CDN Entry Parsing ────────────────────────────────────────────────────────
 
 export interface CdnClientVersionEntry {
   versionId: string;
@@ -213,69 +83,98 @@ export interface CdnClientVersionEntry {
   bannerUrl?: string | null;
 }
 
-function buildManifestCandidates(versionId: string): string[] {
-  const fromConfig = distributionConfig.client.cdnManifestCandidates.map((candidate) =>
-    toAbsoluteUrl(candidate),
-  );
-  const direct = [
-    `${distributionConfig.client.cdnBaseUrl}/clients/${versionId}.json`,
-    `${distributionConfig.client.cdnBaseUrl}/versions/${versionId}.json`,
-    `${distributionConfig.client.cdnBaseUrl}/${versionId}/manifest.json`,
-  ];
-
-  const deduped = new Set<string>([...fromConfig, ...direct]);
-  return [...deduped];
+/** Picks from an `artifacts` sub-object first, then from the root. */
+function pickArtifactField(entry: JsonRecord, ...keys: string[]): string | null {
+  const artifacts = entry.artifacts && typeof entry.artifacts === 'object'
+    ? (entry.artifacts as JsonRecord)
+    : null;
+  for (const key of keys) {
+    const fromArtifacts = artifacts ? asString(artifacts[key]) : null;
+    if (fromArtifacts) return fromArtifacts;
+    const fromRoot = asString(entry[key]);
+    if (fromRoot) return fromRoot;
+  }
+  return null;
 }
 
-function asNumber(value: unknown): number | null {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
+function normalizeEntry(entry: JsonRecord, fallbackVersionId: string): CdnClientVersionEntry | null {
+  const packageUrl =
+    pickArtifactField(entry, 'packageUrl', 'zipUrl', 'downloadUrl') ||
+    asString(entry.clientZip);
+  if (!packageUrl) return null;
+
+  return {
+    versionId: sanitizeVersionId(asString(entry.id) || asString(entry.versionId) || fallbackVersionId),
+    buildVersion:
+      asString(entry.semver) ||
+      asString(entry.buildVersion) ||
+      asString(entry.build) ||
+      asString(entry.version) ||
+      asString(entry.clientVersion),
+    packageUrl: toAbsoluteUrl(packageUrl),
+    versionUrl: pickArtifactField(entry, 'versionUrl', 'versionFileUrl'),
+    baseVersion: asString(entry.baseVersion) || asString(entry.minecraftVersion),
+    assetsIndex: asString(entry.assetsIndex) || asString(entry.assets),
+    versionJsonPath: pickArtifactField(entry, 'versionJsonPath'),
+  };
 }
+
+function parseManifestObject(manifest: JsonRecord, versionId: string): CdnClientVersionEntry | null {
+  // Array of versions
+  const versionsArray =
+    (Array.isArray(manifest.versions) ? manifest.versions : null) ||
+    (Array.isArray(manifest.clients) ? manifest.clients : null);
+
+  if (versionsArray) {
+    for (const item of versionsArray as JsonRecord[]) {
+      if (!item || typeof item !== 'object') continue;
+      const id = asString(item.id) || asString(item.versionId);
+      if (id === versionId) {
+        const normalized = normalizeEntry(item, versionId);
+        if (normalized) return normalized;
+      }
+    }
+  }
+
+  // Map of versions
+  if (manifest.versions && typeof manifest.versions === 'object' && !Array.isArray(manifest.versions)) {
+    const map = manifest.versions as JsonRecord;
+    const candidate = (map[versionId] ?? map.default);
+    if (candidate && typeof candidate === 'object') {
+      const normalized = normalizeEntry(candidate as JsonRecord, versionId);
+      if (normalized) return normalized;
+    }
+  }
+
+  // Treat the manifest itself as an entry
+  return normalizeEntry(manifest, versionId);
+}
+
+// ─── Build Catalog Parsing ────────────────────────────────────────────────────
 
 function asBuildEntry(
-  value: Record<string, unknown>,
-  parent: {
-    versionId: string;
-    baseVersion: string | null;
-    assetsIndex: string | null;
-    bannerUrl: string | null;
-  },
+  value: JsonRecord,
+  parent: { versionId: string; baseVersion: string | null; assetsIndex: string | null; bannerUrl: string | null },
 ): VersionBuildCatalogEntry | null {
   const build = asNumber(value.build);
   if (!build || build <= 0) return null;
 
-  const artifacts =
-    value.artifacts && typeof value.artifacts === 'object'
-      ? (value.artifacts as Record<string, unknown>)
-      : {};
-
   const semver = asString(value.semver) ?? asString(value.version);
   const label = asString(value.label) ?? (semver ? `v${semver}` : `Build ${build}`);
 
-  const packageUrl =
-    asString(artifacts.packageUrl) ||
-    asString(artifacts.zipUrl) ||
-    asString(artifacts.downloadUrl) ||
-    asString(value.packageUrl) ||
-    asString(value.zipUrl) ||
-    asString(value.downloadUrl) ||
-    null;
-  const jarUrl = asString(artifacts.jarUrl) || asString(value.jarUrl) || null;
-  const legacyJarUrl = asString(artifacts.legacyJarUrl) || asString(value.legacyJarUrl) || null;
-
-  const versionUrl =
-    asString(artifacts.versionUrl) ||
-    asString(artifacts.versionFileUrl) ||
-    asString(value.versionUrl) ||
-    asString(value.versionFileUrl) ||
-    null;
-
-  const versionJsonPath =
-    asString(artifacts.versionJsonPath) || asString(value.versionJsonPath) || null;
+  const packageUrl = pickArtifactField(value, 'packageUrl', 'zipUrl', 'downloadUrl');
+  const jarUrl = pickArtifactField(value, 'jarUrl');
+  const legacyJarUrl = pickArtifactField(value, 'legacyJarUrl');
+  const versionUrl = pickArtifactField(value, 'versionUrl', 'versionFileUrl');
+  const versionJsonPath = pickArtifactField(value, 'versionJsonPath');
 
   return {
+    versionBase: asNumber(value.versionBase) ?? build,
+    buildNumber: asNumber(value.buildNumber) ?? 1,
+    buildId: (asString(value.buildId) ?? `${build}.1`) as string,
+    type: (asString(value.type) as 'stable' | 'snapshot' | 'dev') || 'stable',
     build,
-    semver,
+    semver: semver ?? '',
     label,
     packageUrl: packageUrl ? toAbsoluteUrl(packageUrl) : null,
     jarUrl: jarUrl ? toAbsoluteUrl(jarUrl) : null,
@@ -286,43 +185,30 @@ function asBuildEntry(
   };
 }
 
-function asCatalogEntry(
-  value: Record<string, unknown>,
-  fallbackVersionId: string,
-): VersionCatalogEntry | null {
-  const versionId = sanitizeVersionId(
-    asString(value.id) || asString(value.versionId) || fallbackVersionId,
-  );
-
-  const minecraftVersion =
-    asString(value.minecraftVersion) || asString(value.baseVersion) || '1.8.9';
-
+function asCatalogEntry(value: JsonRecord, fallbackVersionId: string): VersionCatalogEntry | null {
+  const versionId = sanitizeVersionId(asString(value.id) || asString(value.versionId) || fallbackVersionId);
+  const minecraftVersion = asString(value.minecraftVersion) || asString(value.baseVersion) || '1.8.9';
   const baseVersion = asString(value.baseVersion) || asString(value.minecraftVersion) || null;
-
   const assetsIndex = asString(value.assetsIndex) || asString(value.assets) || null;
   const bannerUrl = asString(value.bannerUrl);
   const name = asString(value.name) || `Shindo Client ${minecraftVersion}`;
-  const enabled = value.enabled === false ? false : true;
-
-  const buildsRaw = Array.isArray(value.builds)
-    ? (value.builds as Array<Record<string, unknown>>)
-    : null;
+  const enabled = value.enabled !== false;
 
   const parentCtx = { versionId, baseVersion, assetsIndex, bannerUrl };
-  const builds: VersionBuildCatalogEntry[] = [];
+  const buildsRaw = Array.isArray(value.builds) ? (value.builds as JsonRecord[]) : null;
 
+  const builds: VersionBuildCatalogEntry[] = [];
   if (buildsRaw && buildsRaw.length > 0) {
     for (const candidate of buildsRaw) {
-      if (!candidate || typeof candidate !== 'object') continue;
-      const parsed = asBuildEntry(candidate, parentCtx);
-      if (parsed) builds.push(parsed);
+      if (candidate && typeof candidate === 'object') {
+        const parsed = asBuildEntry(candidate, parentCtx);
+        if (parsed) builds.push(parsed);
+      }
     }
   } else {
-    // Legacy mode: version entry itself behaves as a single build.
+    // Legacy: the version entry itself is a single build
     const legacyBuild = asBuildEntry(value, parentCtx);
-    if (legacyBuild) {
-      builds.push(legacyBuild);
-    }
+    if (legacyBuild) builds.push(legacyBuild);
   }
 
   builds.sort((a, b) => b.build - a.build);
@@ -337,29 +223,29 @@ function asCatalogEntry(
     assetsIndex,
     baseVersion,
     latestBuild: latest?.build ?? null,
+    latestBuildId: latest?.buildId ?? null,
     latestSemver: latest?.semver ?? null,
+    latestType: latest?.type ?? null,
     builds,
   };
 }
 
-function parseVersionCatalog(manifest: Record<string, unknown>): VersionCatalogPayload {
+function parseVersionCatalog(manifest: JsonRecord): VersionCatalogPayload {
   const entries: VersionCatalogEntry[] = [];
-  const versionsArray = Array.isArray(manifest.versions)
-    ? (manifest.versions as Array<Record<string, unknown>>)
-    : null;
 
-  if (versionsArray) {
-    for (const versionRaw of versionsArray) {
-      if (!versionRaw || typeof versionRaw !== 'object') continue;
-      const parsed = asCatalogEntry(versionRaw, distributionConfig.client.defaultVersionId);
-      if (parsed) entries.push(parsed);
+  if (Array.isArray(manifest.versions)) {
+    for (const v of manifest.versions as JsonRecord[]) {
+      if (v && typeof v === 'object') {
+        const parsed = asCatalogEntry(v, distributionConfig.client.defaultVersionId);
+        if (parsed) entries.push(parsed);
+      }
     }
   } else if (manifest.versions && typeof manifest.versions === 'object') {
-    const versionsMap = manifest.versions as Record<string, unknown>;
-    for (const [id, value] of Object.entries(versionsMap)) {
-      if (!value || typeof value !== 'object') continue;
-      const parsed = asCatalogEntry(value as Record<string, unknown>, id);
-      if (parsed) entries.push(parsed);
+    for (const [id, v] of Object.entries(manifest.versions as JsonRecord)) {
+      if (v && typeof v === 'object') {
+        const parsed = asCatalogEntry(v as JsonRecord, id);
+        if (parsed) entries.push(parsed);
+      }
     }
   } else {
     const single = asCatalogEntry(manifest, distributionConfig.client.defaultVersionId);
@@ -370,30 +256,76 @@ function parseVersionCatalog(manifest: Record<string, unknown>): VersionCatalogP
     updatedAt: asString(manifest.updatedAt),
     defaultVersionId:
       asString(manifest.defaultVersionId) ||
-      asString((manifest.latest as Record<string, unknown> | undefined)?.versionId) ||
+      asString((manifest.latest as JsonRecord | undefined)?.versionId) ||
       entries[0]?.id ||
       distributionConfig.client.defaultVersionId,
     entries,
   };
 }
 
-async function resolveCatalogFromCandidates(
-  versionId?: string,
-): Promise<VersionCatalogPayload | null> {
-  const candidates = buildManifestCandidates(
-    versionId ?? distributionConfig.client.defaultVersionId,
-  );
-  for (const candidate of candidates) {
-    const raw = await requestJson(candidate);
+// ─── Manifest URL Resolution ──────────────────────────────────────────────────
+
+const DEFAULT_VERSIONING_PATH = '/data/meta/versioning.json';
+
+function getVersioningManifestUrl(): string {
+  const configured = distributionConfig.client.versioningManifestUrl?.trim();
+  return configured || `${distributionConfig.client.cdnBaseUrl.replace(/\/+$/, '')}${DEFAULT_VERSIONING_PATH}`;
+}
+
+function buildManifestCandidates(versionId: string): string[] {
+  const base = distributionConfig.client.cdnBaseUrl;
+  const fromConfig = distributionConfig.client.cdnManifestCandidates.map(toAbsoluteUrl);
+  const extra = [
+    `${base}/clients/${versionId}.json`,
+    `${base}/versions/${versionId}.json`,
+    `${base}/${versionId}/manifest.json`,
+  ];
+  return [...new Set([...fromConfig, ...extra])];
+}
+
+async function resolveCatalogFromCandidates(versionId?: string): Promise<VersionCatalogPayload | null> {
+  const candidates = buildManifestCandidates(versionId ?? distributionConfig.client.defaultVersionId);
+  for (const url of candidates) {
+    const raw = await requestJson(url);
     if (!raw || typeof raw !== 'object') continue;
-    const manifest = raw as Record<string, unknown>;
-    const catalog = parseVersionCatalog(manifest);
-    if (catalog.entries.length > 0) {
-      return catalog;
-    }
+    const catalog = parseVersionCatalog(raw as JsonRecord);
+    if (catalog.entries.length > 0) return catalog;
   }
   return null;
 }
+
+// ─── Versioning Manifest ──────────────────────────────────────────────────────
+
+export interface VersioningEntry {
+  id?: string;
+  versionId?: string;
+  minecraftVersion?: string;
+  baseVersion?: string;
+  javaId?: string | number;
+  javaVersion?: string | number;
+  javaMajor?: string | number;
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+
+export interface VersioningManifest {
+  schema?: string;
+  updatedAt?: string;
+  defaultVersionId?: string;
+  latest?: VersioningEntry;
+  versions?: VersioningEntry[] | Record<string, VersioningEntry>;
+}
+
+export async function loadVersioningManifest(): Promise<VersioningManifest | null> {
+  const payload = await requestJson(getVersioningManifestUrl());
+  return payload && typeof payload === 'object' ? (payload as VersioningManifest) : null;
+}
+
+export async function loadVersionCatalogFromCdn(): Promise<VersionCatalogPayload | null> {
+  return resolveCatalogFromCandidates(distributionConfig.client.defaultVersionId);
+}
+
+// ─── Public Version Resolution ────────────────────────────────────────────────
 
 function toResolvedVersionEntry(
   entry: VersionCatalogEntry,
@@ -402,7 +334,7 @@ function toResolvedVersionEntry(
   if (!build.packageUrl) return null;
   return {
     versionId: entry.id,
-    buildVersion: build.semver ?? String(build.build),
+    buildVersion: build.semver || String(build.build),
     buildNumber: build.build,
     packageUrl: build.packageUrl,
     jarUrl: build.jarUrl,
@@ -415,49 +347,6 @@ function toResolvedVersionEntry(
   };
 }
 
-export interface VersioningEntry {
-  id?: string;
-  versionId?: string;
-  minecraftVersion?: string;
-  baseVersion?: string;
-  javaId?: string | number;
-  javaVersion?: string | number;
-  enabled?: boolean;
-  javaMajor?: string | number;
-  [key: string]: unknown;
-}
-
-export interface VersioningManifest {
-  schema?: string;
-  updatedAt?: string;
-  defaultVersionId?: string;
-  latest?: VersioningEntry;
-  versions?: VersioningEntry[] | Record<string, VersioningEntry>;
-}
-
-const DEFAULT_VERSIONING_PATH = '/data/meta/versioning.json';
-
-function getVersioningManifestUrl(): string {
-  const configured = distributionConfig.client.versioningManifestUrl?.trim();
-  if (configured) {
-    return configured;
-  }
-  return `${distributionConfig.client.cdnBaseUrl.replace(/\/+$/, '')}${DEFAULT_VERSIONING_PATH}`;
-}
-
-export async function loadVersioningManifest(): Promise<VersioningManifest | null> {
-  const url = getVersioningManifestUrl();
-  const payload = await requestJson(url);
-  if (!payload || typeof payload !== 'object') {
-    return null;
-  }
-  return payload as VersioningManifest;
-}
-
-export async function loadVersionCatalogFromCdn(): Promise<VersionCatalogPayload | null> {
-  return resolveCatalogFromCandidates(distributionConfig.client.defaultVersionId);
-}
-
 export async function resolveClientVersionFromCdn(
   versionIdInput: string,
   buildNumber?: number | null,
@@ -467,37 +356,32 @@ export async function resolveClientVersionFromCdn(
   if (!catalog) return null;
 
   const targetEntry =
-    catalog.entries.find((entry) => entry.id === versionId) ||
-    catalog.entries.find((entry) => entry.id === catalog.defaultVersionId) ||
+    catalog.entries.find((e) => e.id === versionId) ||
+    catalog.entries.find((e) => e.id === catalog.defaultVersionId) ||
     null;
 
   if (!targetEntry || targetEntry.builds.length === 0) return null;
 
-  const requestedBuild =
-    typeof buildNumber === 'number' && Number.isFinite(buildNumber) ? buildNumber : null;
-
+  const requestedBuild = typeof buildNumber === 'number' && Number.isFinite(buildNumber) ? buildNumber : null;
   const selectedBuild =
-    (requestedBuild
-      ? targetEntry.builds.find((candidate) => candidate.build === requestedBuild)
-      : null) || targetEntry.builds[0];
+    (requestedBuild ? targetEntry.builds.find((b) => b.build === requestedBuild) : null) ||
+    targetEntry.builds[0];
 
   const resolved = toResolvedVersionEntry(targetEntry, selectedBuild);
-  if (resolved) {
-    return resolved;
-  }
+  if (resolved) return resolved;
 
-  // Backward compatibility fallback for old schemas not parsed as catalog.
-  const candidates = buildManifestCandidates(versionId);
-  for (const candidate of candidates) {
-    const raw = await requestJson(candidate);
+  // Backward compatibility: fall back to raw manifest parsing
+  for (const url of buildManifestCandidates(versionId)) {
+    const raw = await requestJson(url);
     if (!raw || typeof raw !== 'object') continue;
-    const parsed = parseManifestObject(raw as Record<string, unknown>, versionId);
+    const parsed = parseManifestObject(raw as JsonRecord, versionId);
     if (!parsed) continue;
-    if (parsed.versionUrl && parsed.versionUrl.trim().length > 0) {
+    if (parsed.versionUrl?.trim()) {
       parsed.versionUrl = toAbsoluteUrl(parsed.versionUrl);
     }
     return parsed;
   }
+
   return null;
 }
 
