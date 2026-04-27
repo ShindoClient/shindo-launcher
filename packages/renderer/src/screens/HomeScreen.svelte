@@ -16,6 +16,9 @@
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
   import X from 'lucide-svelte/icons/x';
+  import FileText from 'lucide-svelte/icons/file-text';
+  import RefreshCw from 'lucide-svelte/icons/refresh-cw';
+  import Minus from 'lucide-svelte/icons/minus';
   import { appStore } from '../store/appStore';
   import { resolveVersionPresentation } from '../config/versionCatalog';
   import bannerUrl from '../assets/Banner.png';
@@ -123,6 +126,85 @@
   let offlineName = '';
   let removeConfirmId: string | null = null;
   let selectedBuildType: 'stable' | 'snapshot' | 'dev' | 'all' = 'all';
+
+  // Changelog state
+  let changelogs: Array<{text: string, type: number}> = [];
+  let changelogLoading = false;
+  let changelogPage = 0;
+  let changelogRotationTimer: ReturnType<typeof setInterval> | null = null;
+
+  const changelogPageSize = 7;
+
+  $: totalChangelogPages = Math.ceil(changelogs.length / changelogPageSize) || 1;
+  $: paginatedChangelogs = changelogs.slice(
+    changelogPage * changelogPageSize,
+    (changelogPage + 1) * changelogPageSize
+  );
+
+  async function fetchChangelogs() {
+    changelogLoading = true;
+    try {
+      const url = `https://cdn.shindoclient.com/data/changelogs/versions/${config?.selectedBuild ?? clientState?.baseVersion}.json`;
+      console.log('[Changelog] Fetching from:', url);
+      const res = await fetch(url);
+      console.log('[Changelog] Response status:', res.status);
+      if (res.ok) {
+        const data = await res.json();
+        changelogs = data.changelogs || [];
+        console.log('[Changelog] Loaded', changelogs.length, 'items');
+        changelogPage = 0;
+        startChangelogRotation();
+      } else {
+        console.error('[Changelog] Failed to fetch, status:', res.status);
+        // Fallback dummy data for testing
+        changelogs = [
+          { text: 'Welcome to Shindo Client! This is a placeholder changelog.', type: 0 },
+          { text: 'New launcher features added - enjoy the expanded design!', type: 0 },
+          { text: 'Fixed version selector UI improvements', type: 1 },
+          { text: 'Updated game performance', type: 1 },
+          { text: 'General stability improvements', type: 1 },
+        ];
+        changelogPage = 0;
+        startChangelogRotation();
+      }
+    } catch (err) {
+      console.error('[Changelog] Fetch error:', err);
+      // Fallback dummy data for testing
+      changelogs = [
+        { text: 'Welcome to Shindo Client! This is a placeholder changelog.', type: 0 },
+        { text: 'New launcher features added - enjoy the expanded design!', type: 0 },
+        { text: 'Fixed version selector UI improvements', type: 1 },
+        { text: 'Updated game performance', type: 1 },
+        { text: 'General stability improvements', type: 1 },
+      ];
+      changelogPage = 0;
+      startChangelogRotation();
+    } finally {
+      changelogLoading = false;
+    }
+  }
+
+  function startChangelogRotation() {
+    if (changelogRotationTimer) clearInterval(changelogRotationTimer);
+    if (totalChangelogPages > 1) {
+      changelogRotationTimer = setInterval(() => {
+        changelogPage = (changelogPage + 1) % totalChangelogPages;
+      }, 8000);
+    }
+  }
+
+  function getChangelogTypeInfo(type: number): { color: string, icon: typeof Plus, label: string } {
+    switch (type) {
+      case 0: return { color: '#22c55e', icon: Plus, label: 'ADDED' };
+      case 1: return { color: '#f59e0b', icon: RefreshCw, label: 'FIXED' };
+      case 2: return { color: '#ef4444', icon: Minus, label: 'REMOVED' };
+      default: return { color: '#6366f1', icon: FileText, label: 'INFO' };
+    }
+  }
+
+  $: if (selectedVersionId) {
+    fetchChangelogs();
+  }
   $: if (config?.releaseChannel && selectedBuildType === 'all') {
     selectedBuildType = config.releaseChannel;
   }
@@ -554,20 +636,19 @@
 
   .launcher-bar-wrap {
     position: absolute;
-    left: 50%;
+    left: 28px;
     bottom: 22px;
-    transform: translateX(-50%);
-    width: min(940px, calc(100% - 90px));
+    width: min(760px, calc(100vw - 90px));
     z-index: 25;
   }
 
   .version-banner {
-    height: 152px;
+    height: 200px;
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     background-size: cover;
     background-position: center;
-    margin-bottom: 12px;
+    margin-bottom: 20px;
     display: flex;
     align-items: flex-end;
     overflow: hidden;
@@ -1053,10 +1134,84 @@
     }
   }
 
+  .changelog-panel {
+    position: absolute;
+    left: min(800px, calc(100vw - 30px));
+    bottom: 22px;
+    width: 380px;
+    height: 294px;
+    background: rgba(8, 12, 26, 0.95);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 16px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 40px rgba(0, 0, 0, 0.45);
+    z-index: 25;
+  }
+
+  .changelog-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+
+  .changelog-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+  }
+
+  .changelog-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .changelog-badge {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .changelog-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: #e5e7eb;
+    line-height: 1.4;
+  }
+
+  .changelog-pagination {
+    margin-top: 10px;
+    text-align: right;
+    font-size: 10px;
+    font-weight: 700;
+    color: #6b7280;
+    letter-spacing: 0.05em;
+  }
+
   @media (max-width: 880px) {
     .launcher-bar-wrap {
       width: calc(100% - 32px);
+      left: 16px;
       bottom: 14px;
+    }
+
+    .changelog-panel {
+      display: none;
     }
 
     .version-banner {
@@ -1278,6 +1433,31 @@
       </button>
     </div>
   </div>
+
+  {#if changelogs.length > 0 || changelogLoading}
+    <div class="changelog-panel">
+      <div class="changelog-header">
+        <FileText size={14} />
+        <span>CHANGELOG</span>
+      </div>
+      <div class="changelog-list">
+        {#each paginatedChangelogs as item}
+          {@const typeInfo = getChangelogTypeInfo(item.type)}
+          <div class="changelog-item">
+            <span class="changelog-badge" style={`background: ${typeInfo.color}`}>
+              <svelte:component this={typeInfo.icon} size={10} />
+            </span>
+            <span class="changelog-text">{item.text}</span>
+          </div>
+        {/each}
+      </div>
+      {#if totalChangelogPages > 1}
+        <div class="changelog-pagination">
+          <span>{changelogPage + 1}/{totalChangelogPages}</span>
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   {#if addPanelOpen}
     <div
