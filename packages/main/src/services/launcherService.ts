@@ -11,6 +11,7 @@ import type {
   LauncherUpdateInfoPayload,
   LauncherUpdateResultPayload,
   MemoryOptions,
+  LauncherConfig,
 } from '@shindo/shared';
 import {
   ensureClientUpToDate,
@@ -38,8 +39,13 @@ import {
   parseJvmArgs,
   resolveMemory,
 } from './launcher/helpers';
+import { LucideFan } from 'lucide-svelte';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+function currentLanguage(conf: LauncherConfig | null): 'pt' | 'en' {
+  return conf?.language === 'pt' ? 'pt' : 'en';
+}
 
 export interface LaunchCallbacks {
   onLog?: (message: string) => void;
@@ -147,7 +153,7 @@ export class LauncherService {
     if (explicitPath) return explicitPath;
 
     let config = loadConfig();
-
+    const language = currentLanguage(config);
     // 2. Custom Java from config
     if (config.javaSource === 'custom' && config.javaCustomPath) {
       const validation = validateJavaExecutable(config.javaCustomPath);
@@ -156,24 +162,24 @@ export class LauncherService {
         const resolvedMajor = detectedMajor ?? requiredMajor;
         const javaPath = config.javaCustomPath;
         updateConfig({ javaSource: 'custom', javaCustomPath: javaPath, javaPath, javaRuntimeMajor: 8 });
-        this.jreNotifier?.({ message: `Usando Java custom em ${javaPath}`, severity: 'info' });
+        this.jreNotifier?.({ message: language == 'pt' ? `Usando Java custom em ${javaPath}` : `Using custom Java at ${javaPath}`, severity: 'info' });
         callbacks?.onJavaReady?.({ path: javaPath, major: resolvedMajor, source: 'custom' });
         return javaPath;
       }
 
       // Custom path invalid — fall back to auto
-      const error = validation.error ?? 'Java personalizado inválido';
-      this.jreNotifier?.({ message: `${error}. Voltando para Java automático.`, severity: 'warning' });
+      const error = validation.error ?? language == 'pt' ? 'Java personalizado inválido' : 'Invalid custom Java path';
+      this.jreNotifier?.({ message: language == 'pt' ? `${error}. Voltando para Java automático.` : `${error}. Falling back to auto Java.`, severity: 'warning' });
       callbacks?.onJavaError?.(error);
       updateConfig({ javaSource: 'auto', javaPath: null, javaCustomPath: null, javaRuntimeMajor: undefined });
     }
 
     // 3. Auto-managed JRE
-    callbacks?.onJavaProgress?.({ message: `Preparando Java ${requiredMajor}...`, percent: 5 });
+    callbacks?.onJavaProgress?.({ message: language == 'pt' ? `Preparando Java ${requiredMajor}...` : `Preparing Java ${requiredMajor}...`, percent: 5 });
     try {
       const runtime = await ensureJavaRuntime(requiredMajor as Parameters<typeof ensureJavaRuntime>[0], callbacks?.onJavaProgress);
       updateConfig({ javaSource: 'auto', javaPath: runtime.path, javaRuntimeMajor: runtime.major });
-      this.jreNotifier?.({ message: `Java ${runtime.major} pronto em ${runtime.path}`, severity: 'info' });
+      this.jreNotifier?.({ message: language == 'pt' ? `Java ${runtime.major} pronto em ${runtime.path}` : `Java ${runtime.major} ready at ${runtime.path}`, severity: 'info' });
       callbacks?.onJavaReady?.({ path: runtime.path, major: runtime.major, source: runtime.source });
       return runtime.path;
     } catch (error) {
@@ -204,6 +210,7 @@ export class LauncherService {
     const clientState = await this.ensureClientUpToDate({
       versionId: options?.versionId || config.versionId,
       build: selectedBuild,
+      releaseChannel: config.releaseChannel,
     });
 
     if (!clientState.versionJsonPath) {

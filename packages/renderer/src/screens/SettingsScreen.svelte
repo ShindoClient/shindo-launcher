@@ -1,7 +1,7 @@
 <script lang="ts">
   import ChevronLeft from 'lucide-svelte/icons/chevron-left';
   import Save from 'lucide-svelte/icons/save';
-  import type { JavaValidationResult, LauncherConfig } from '@shindo/shared';
+  import type { JavaValidationResult, LauncherConfig, ReleaseChannel } from '@shindo/shared';
   import ScrollArea from '../components/ScrollArea.svelte';
   import { appStore } from '../store/appStore';
   import { availableLanguages, t } from '../i18n';
@@ -16,6 +16,7 @@
   let ramValue = config?.ramGB ?? 4;
   let jvmArgsDraft = config?.jvmArgs ?? '';
   let language: Language = config?.language ?? 'en';
+  let releaseChannel: ReleaseChannel = config?.releaseChannel ?? 'stable';
   let savingJvmArgs = false;
 
   let customPathDraft = config?.javaCustomPath ?? '';
@@ -27,6 +28,7 @@
   $: if (config) {
     ramValue = config.ramGB;
     language = (config.language as Language) ?? 'en';
+    releaseChannel = (config.releaseChannel as ReleaseChannel) ?? 'stable';
     if (!savingJvmArgs) {
       jvmArgsDraft = config.jvmArgs ?? '';
     }
@@ -96,6 +98,16 @@
     language = nextLanguage;
     try {
       await applyConfigPatch({ language: nextLanguage });
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  async function handleReleaseChannelChange(event: Event) {
+    const nextChannel = (event.target as HTMLSelectElement).value as ReleaseChannel;
+    releaseChannel = nextChannel;
+    try {
+      await applyConfigPatch({ releaseChannel: nextChannel, selectedBuild: null });
     } catch (error) {
       console.error(error);
     }
@@ -323,6 +335,23 @@
           placeholder="-Xmx4G -XX:+UseG1GC"
         />
         <div class="mt-3 text-xs text-gray-500">{$t('settings.jvmArgsTip')}</div>
+      </section>
+
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-[0_18px_60px_rgba(2,6,23,0.65)]">
+        <div class="mb-5">
+          <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Release Channel</p>
+          <h2 class="text-2xl font-semibold text-white">Update stream</h2>
+          <p class="text-sm text-gray-400 mt-2">Controls which build channel the launcher tracks by default.</p>
+        </div>
+        <select
+          class="w-full rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+          value={releaseChannel}
+          on:change={handleReleaseChannelChange}
+        >
+          <option value="stable">Stable</option>
+          <option value="snapshot">Snapshot</option>
+          <option value="dev">Dev</option>
+        </select>
       </section>
 
       <section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-[0_18px_60px_rgba(2,6,23,0.65)]">

@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { AccountProfile, LauncherConfig, VersionCatalogEntry, VersionBuildCatalogEntry } from '@shindo/shared';
+  import type {
+    AccountProfile,
+    LauncherConfig,
+    ReleaseChannel,
+    VersionCatalogEntry,
+    VersionBuildCatalogEntry,
+  } from '@shindo/shared';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
   import ChevronUp from 'lucide-svelte/icons/chevron-up';
   import Plus from 'lucide-svelte/icons/plus';
@@ -117,6 +123,9 @@
   let offlineName = '';
   let removeConfirmId: string | null = null;
   let selectedBuildType: 'stable' | 'snapshot' | 'dev' | 'all' = 'all';
+  $: if (config?.releaseChannel && selectedBuildType === 'all') {
+    selectedBuildType = config.releaseChannel;
+  }
 
   onMount(() => {
     const handleClick = (event: MouseEvent) => {
@@ -225,6 +234,13 @@
     const value = Number((event.target as HTMLSelectElement).value);
     const nextBuild = Number.isFinite(value) && value > 0 ? value : null;
     await applyConfigPatch({ selectedBuild: nextBuild });
+  }
+
+  async function handleChannelSelect(type: 'stable' | 'snapshot' | 'dev' | 'all') {
+    selectedBuildType = type;
+    if (type === 'all') return;
+    const releaseChannel = type as ReleaseChannel;
+    await applyConfigPatch({ releaseChannel, selectedBuild: null });
   }
 
   function normalizeStatusText(input: string): string {
@@ -1179,28 +1195,28 @@
               <button
                 type="button"
                 class={`type-tab ${selectedBuildType === 'all' ? 'active' : ''}`}
-                on:click={() => (selectedBuildType = 'all')}
+                on:click={() => handleChannelSelect('all')}
               >
                 All
               </button>
               <button
                 type="button"
                 class={`type-tab stable ${selectedBuildType === 'stable' ? 'active' : ''}`}
-                on:click={() => (selectedBuildType = 'stable')}
+                on:click={() => handleChannelSelect('stable')}
               >
                 Stable
               </button>
               <button
                 type="button"
                 class={`type-tab snapshot ${selectedBuildType === 'snapshot' ? 'active' : ''}`}
-                on:click={() => (selectedBuildType = 'snapshot')}
+                on:click={() => handleChannelSelect('snapshot')}
               >
                 Snapshot
               </button>
               <button
                 type="button"
                 class={`type-tab dev ${selectedBuildType === 'dev' ? 'active' : ''}`}
-                on:click={() => (selectedBuildType = 'dev')}
+                on:click={() => handleChannelSelect('dev')}
               >
                 Dev
               </button>

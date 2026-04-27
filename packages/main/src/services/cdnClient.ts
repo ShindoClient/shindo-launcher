@@ -1,6 +1,11 @@
 import { Readable } from 'node:stream';
 import { ReadableStream as WebReadableStream } from 'node:stream/web';
-import type { VersionCatalogEntry, VersionCatalogPayload, VersionBuildCatalogEntry } from '@shindo/shared';
+import type {
+  ReleaseChannel,
+  VersionCatalogEntry,
+  VersionCatalogPayload,
+  VersionBuildCatalogEntry,
+} from '@shindo/shared';
 import { distributionConfig, sanitizeVersionId } from '../config/distributionConfig';
 import { getFetch } from './fetchClient';
 
@@ -82,6 +87,12 @@ export interface CdnClientVersionEntry {
   versionJsonPath?: string | null;
   bannerUrl?: string | null;
 }
+const CHANNEL_ORDER: ReleaseChannel[] = ['stable', 'snapshot', 'dev'];
+const CHANNEL_PRIORITY: Record<ReleaseChannel, number> = {
+  dev: 0,
+  snapshot: 1,
+  stable: 2,
+};
 
 /** Picks from an `artifacts` sub-object first, then from the root. */
 function pickArtifactField(entry: JsonRecord, ...keys: string[]): string | null {
@@ -159,8 +170,14 @@ function asBuildEntry(
   const build = asNumber(value.build);
   if (!build || build <= 0) return null;
 
-  const semver = asString(value.semver) ?? asString(value.version);
-  const label = asString(value.label) ?? (semver ? `v${semver}` : `Build ${build}`);
+  const semver = asString(value.semver) ?? asString(value.version) ?? '';
+  const fallbackBuildNumber = asNumber(value.buildNumber);
+  const fallbackBuildId = asString(value.buildId);
+  const resolvedBuildNumber = fallbackBuildNumber ?? (fallbackBuildId?.split('.').length === 2 ? Number(fallbackBuildId.split('.')[1]) : 1);
+  const resolvedBuildId = fallbackBuildId ?? `${build}.${Number.isFinite(resolvedBuildNumber) ? resolvedBuildNumber : 1}`;
+  const typeRaw = asString(value.type);
+  const resolvedChannel = (typeRaw && CHANNEL_ORDER.includes(typeRaw as ReleaseChannel) ? typeRaw : 'stable') as ReleaseChannel;
+  const label = asString(value.label) ?? (semver ? `v${semver}` : `Build ${resolvedBuildId}`);
 
   const packageUrl = pickArtifactField(value, 'packageUrl', 'zipUrl', 'downloadUrl');
   const jarUrl = pickArtifactField(value, 'jarUrl');
@@ -170,9 +187,9 @@ function asBuildEntry(
 
   return {
     versionBase: asNumber(value.versionBase) ?? build,
-    buildNumber: asNumber(value.buildNumber) ?? 1,
-    buildId: (asString(value.buildId) ?? `${build}.1`) as string,
-    type: (asString(value.type) as 'stable' | 'snapshot' | 'dev') || 'stable',
+    buildNumber: Number.isFinite(resolvedBuildNumber as number) ? (resolvedBuildNumber as number) : 1,
+    buildId: resolvedBuildId,
+    type: resolvedChannel,
     build,
     semver: semver ?? '',
     label,
@@ -183,6 +200,12 @@ function asBuildEntry(
     versionJsonPath,
     releasedAt: asString(value.releasedAt),
   };
+}
+
+function compareBuildEntries(a: VersionBuildCatalogEntry, b: VersionBuildCatalogEntry): number {
+  if (a.build !== b.build) return b.build - a.build;
+  if (a.type !== b.type) return CHANNEL_PRIORITY[b.type] - CHANNEL_PRIORITY[a.type];
+  return b.buildNumber - a.buildNumber;
 }
 
 function asCatalogEntry(value: JsonRecord, fallbackVersionId: string): VersionCatalogEntry | null {
@@ -211,7 +234,7 @@ function asCatalogEntry(value: JsonRecord, fallbackVersionId: string): VersionCa
     if (legacyBuild) builds.push(legacyBuild);
   }
 
-  builds.sort((a, b) => b.build - a.build);
+  builds.sort(compareBuildEntries);
   const latest = builds[0] ?? null;
 
   return {
@@ -313,6 +336,12 @@ export interface VersioningManifest {
   updatedAt?: string;
   defaultVersionId?: string;
   latest?: VersioningEntry;
+  channels?: Partial<Record<ReleaseChannel, VersioningEntry>>;
+  recommended?: ReleaseChannel;
+  java?: {
+    version?: number;
+    vendor?: string;
+  };
   versions?: VersioningEntry[] | Record<string, VersioningEntry>;
 }
 
@@ -334,7 +363,7 @@ function toResolvedVersionEntry(
   if (!build.packageUrl) return null;
   return {
     versionId: entry.id,
-    buildVersion: build.semver || String(build.build),
+    buildVersion: build.buildId || build.semver || String(build.build),
     buildNumber: build.build,
     packageUrl: build.packageUrl,
     jarUrl: build.jarUrl,
@@ -347,11 +376,50 @@ function toResolvedVersionEntry(
   };
 }
 
+function selectBuildByChannel(
+  builds: VersionBuildCatalogEntry[],
+  channel: ReleaseChannel | null,
+): VersionBuildCatalogEntry | null {
+  if (builds.length === 0) return null;
+  if (!channel) return builds[0];
+  const inChannel = builds.filter((b) => b.type === channel);
+  return inChannel[0] ?? builds[0];
+}
+
+function pickBuildFromManifest(
+  manifest: VersioningManifest | null,
+  preferredChannel?: ReleaseChannel | null,
+) : { build: number | null; buildId: string | null; channel: ReleaseChannel | null } {
+  const empty = { build: null, buildId: null, channel: null as ReleaseChannel | null };
+  if (!manifest) return empty;
+  const recommended = manifest.recommended ?? 'stable';
+  const selected = preferredChannel ?? recommended;
+
+  const channels = manifest.channels ?? {};
+  for (const channel of [selected, ...CHANNEL_ORDER.filter((c) => c !== selected)]) {
+    const entry = channels[channel];
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as Record<string, unknown>;
+    const build = asNumber(record.build);
+    const buildId = asString(record.buildId);
+    if (build || buildId) {
+      return {
+        build: build ?? null,
+        buildId: buildId ?? null,
+        channel,
+      };
+    }
+  }
+  return empty;
+}
+
 export async function resolveClientVersionFromCdn(
   versionIdInput: string,
-  buildNumber?: number | null,
+  options: { buildNumber?: number | null; channel?: ReleaseChannel | null } = {},
 ): Promise<CdnClientVersionEntry | null> {
   const versionId = sanitizeVersionId(versionIdInput);
+  const manifest = await loadVersioningManifest();
+  const preferredBuild = pickBuildFromManifest(manifest, options.channel);
   const catalog = await resolveCatalogFromCandidates(versionId);
   if (!catalog) return null;
 
@@ -362,10 +430,24 @@ export async function resolveClientVersionFromCdn(
 
   if (!targetEntry || targetEntry.builds.length === 0) return null;
 
-  const requestedBuild = typeof buildNumber === 'number' && Number.isFinite(buildNumber) ? buildNumber : null;
-  const selectedBuild =
-    (requestedBuild ? targetEntry.builds.find((b) => b.build === requestedBuild) : null) ||
-    targetEntry.builds[0];
+  const requestedBuild =
+    typeof options.buildNumber === 'number' && Number.isFinite(options.buildNumber)
+      ? options.buildNumber
+      : null;
+  const byRequestedBuild = requestedBuild
+    ? targetEntry.builds.find((b) => b.build === requestedBuild)
+    : null;
+  const byPreferredBuild = preferredBuild?.build
+    ? targetEntry.builds.find((b) => b.build === preferredBuild.build)
+    : null;
+  const byPreferredBuildId = preferredBuild?.buildId
+    ? targetEntry.builds.find((b) => b.buildId === preferredBuild.buildId)
+    : null;
+  const byChannel = selectBuildByChannel(
+    targetEntry.builds,
+    options.channel ?? preferredBuild?.channel ?? manifest?.recommended ?? null,
+  );
+  const selectedBuild = byRequestedBuild ?? byPreferredBuildId ?? byPreferredBuild ?? byChannel ?? targetEntry.builds[0];
 
   const resolved = toResolvedVersionEntry(targetEntry, selectedBuild);
   if (resolved) return resolved;

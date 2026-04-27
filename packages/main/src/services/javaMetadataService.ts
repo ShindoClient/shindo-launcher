@@ -118,6 +118,12 @@ export async function resolveJavaMajorFromVersioning(
   const manifest = await getCachedManifest();
   if (!manifest) return null;
 
+  const globalRequirement =
+    manifest.java && typeof manifest.java === 'object'
+      ? parseJavaMajor((manifest.java as Record<string, unknown>).version)
+      : null;
+  if (globalRequirement) return globalRequirement;
+
   const entry = findVersionEntry(manifest, versionId, minecraftVersion);
   if (!entry) return null;
 

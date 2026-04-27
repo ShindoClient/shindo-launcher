@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { JavaMajor, JavaSource, LauncherConfig } from '@shindo/shared';
+import type { JavaMajor, JavaSource, LauncherConfig, ReleaseChannel } from '@shindo/shared';
 import { getBaseDataDir } from '../utils/pathResolver';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -8,6 +8,7 @@ import { getBaseDataDir } from '../utils/pathResolver';
 const CONFIG_FILE = path.join(getBaseDataDir(), 'config.json');
 
 const ALLOWED_JAVA_MAJORS: JavaMajor[] = [8, 11, 16, 17, 21];
+const ALLOWED_RELEASE_CHANNELS: ReleaseChannel[] = ['stable', 'snapshot', 'dev'];
 
 const DEFAULT_CONFIG: LauncherConfig = {
   ramGB: 4,
@@ -18,6 +19,7 @@ const DEFAULT_CONFIG: LauncherConfig = {
   jvmArgs: '',
   versionId: 'ShindoClient',
   selectedBuild: null,
+  releaseChannel: 'stable',
   showLogsOnLaunch: true,
   language: 'en',
 };
@@ -33,6 +35,13 @@ function normalizeJavaSource(value: unknown, hasCustomPath: boolean): JavaSource
 function normalizeJavaMajor(value: unknown): JavaMajor | undefined {
   const n = typeof value === 'number' ? value : Number(value);
   return ALLOWED_JAVA_MAJORS.includes(n as JavaMajor) ? (n as JavaMajor) : undefined;
+}
+
+function normalizeReleaseChannel(value: unknown): ReleaseChannel {
+  const fallback: ReleaseChannel = 'stable';
+  return ALLOWED_RELEASE_CHANNELS.includes(value as ReleaseChannel)
+    ? (value as ReleaseChannel)
+    : fallback;
 }
 
 function normalizeConfig(raw: Partial<LauncherConfig> & Record<string, unknown>): LauncherConfig {
@@ -53,6 +62,7 @@ function normalizeConfig(raw: Partial<LauncherConfig> & Record<string, unknown>)
     javaPath,
     // Support legacy field name `javaVersion` alongside current `javaRuntimeMajor`
     javaRuntimeMajor: normalizeJavaMajor(raw.javaRuntimeMajor ?? raw.javaVersion),
+    releaseChannel: normalizeReleaseChannel(raw.releaseChannel),
   };
 }
 

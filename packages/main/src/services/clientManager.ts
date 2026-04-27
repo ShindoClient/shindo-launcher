@@ -1,6 +1,7 @@
 import type {
   ClientStatePayload,
   ClientUpdatePayload,
+  ReleaseChannel,
   ReleaseAssetInfo,
   ReleaseInfo,
   VersionCatalogPayload,
@@ -38,6 +39,7 @@ export interface EnsureClientOptions {
   force?: boolean;
   versionId?: string;
   build?: number | null;
+  releaseChannel?: ReleaseChannel;
 }
 
 // ─── Internal Types ───────────────────────────────────────────────────────────
@@ -262,8 +264,9 @@ async function extractZip(zipFile: string, destDir: string): Promise<void> {
 async function resolveFromCdn(
   versionId: string,
   build?: number | null,
+  releaseChannel?: ReleaseChannel,
 ): Promise<ResolvedClientSource | null> {
-  const entry = await resolveClientVersionFromCdn(versionId, build);
+  const entry = await resolveClientVersionFromCdn(versionId, { buildNumber: build, channel: releaseChannel });
   if (!entry?.packageUrl) return null;
 
   const remoteVersion =
@@ -311,8 +314,30 @@ async function resolveFromGithub(versionId: string): Promise<ResolvedClientSourc
 async function resolveClientSource(
   versionId: string,
   build?: number | null,
+  releaseChannel?: ReleaseChannel,
 ): Promise<ResolvedClientSource> {
-  return (await resolveFromCdn(versionId, build)) ?? resolveFromGithub(versionId);
+  return (await resolveFromCdn(versionId, build, releaseChannel)) ?? resolveFromGithub(versionId);
+}
+
+function shouldSkipUpdate(
+  localVersion: string | null,
+  remoteVersion: string,
+): boolean {
+  if (!localVersion) return false;
+  if (localVersion === remoteVersion) return true;
+  const localMatch = localVersion.match(/^(\\d+)\\.(\\d+)$/);
+  const remoteMatch = remoteVersion.match(/^(\\d+)\\.(\\d+)$/);
+  if (!localMatch || !remoteMatch) return false;
+  const localBuild = Number(localMatch[1]);
+  const localBuildNumber = Number(localMatch[2]);
+  const remoteBuild = Number(remoteMatch[1]);
+  const remoteBuildNumber = Number(remoteMatch[2]);
+  if ([localBuild, localBuildNumber, remoteBuild, remoteBuildNumber].some((n) => Number.isNaN(n))) {
+    return false;
+  }
+  if (remoteBuild < localBuild) return true;
+  if (remoteBuild > localBuild) return false;
+  return remoteBuildNumber <= localBuildNumber;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -321,13 +346,15 @@ export async function ensureClientUpToDate({
   force = false,
   versionId: requestedVersionId,
   build,
+  releaseChannel,
 }: EnsureClientOptions = {}): Promise<ClientUpdatePayload> {
   const layout = resolveStorageLayout(requestedVersionId);
-  const source = await resolveClientSource(layout.versionId, build);
+  const resolvedChannel = releaseChannel ?? loadConfig().releaseChannel;
+  const source = await resolveClientSource(layout.versionId, build, resolvedChannel);
   const localVersion = readLocalVersion(layout.versionMarkerFile, layout.versionId);
 
   // Up-to-date: skip download
-  if (!force && localVersion && localVersion === source.remoteVersion) {
+  if (!force && shouldSkipUpdate(localVersion, source.remoteVersion)) {
     const jsonPath = normalizeVersionLayout(layout.clientDir, layout.versionId, source.hintedVersionJsonPath);
     const parsed = parseClientJson(jsonPath, layout.versionId);
     return {

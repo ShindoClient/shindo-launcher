@@ -125,6 +125,7 @@ async function runSequence(service: LauncherService): Promise<void> {
       clientState = await service.ensureClientUpToDate({
         versionId: config.versionId,
         build: config.selectedBuild,
+        releaseChannel: config.releaseChannel,
       });
     },
   });

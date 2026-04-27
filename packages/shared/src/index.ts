@@ -39,6 +39,7 @@ export const enum IpcEvent {
 export type LaunchLogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type JavaMajor = 8 | 11 | 16 | 17 | 21;
+export type ReleaseChannel = 'stable' | 'snapshot' | 'dev';
 
 export interface LaunchLogEntry {
   level: LaunchLogLevel;
@@ -98,7 +99,7 @@ export interface VersionBuildCatalogEntry {
   versionBase: number;
   buildNumber: number;
   buildId: string;
-  type: 'stable' | 'snapshot' | 'dev';
+  type: ReleaseChannel;
   semver: string;
   build: number;
   label: string;
@@ -121,7 +122,7 @@ export interface VersionCatalogEntry {
   latestBuild: number | null;
   latestBuildId: string | null;
   latestSemver: string | null;
-  latestType: 'stable' | 'snapshot' | 'dev' | null;
+  latestType: ReleaseChannel | null;
   builds: VersionBuildCatalogEntry[];
 }
 
@@ -217,6 +218,7 @@ export interface LauncherConfig {
   jvmArgs: string;
   versionId: string;
   selectedBuild?: number | null;
+  releaseChannel?: ReleaseChannel;
   showLogsOnLaunch: boolean;
   language: 'en' | 'pt';
 }
