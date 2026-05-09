@@ -176,8 +176,9 @@
   <div class="scroll-area__track" on:pointerdown={onTrackPointerDown} aria-hidden="true">
     <div
       class="scroll-area__handle"
+      tabindex="0"
       style={`height: ${handleHeight}px; transform: translateY(${handleOffset}px);`}
       on:pointerdown|stopPropagation={onHandlePointerDown}
-    />
+    ></div>
   </div>
 </div>

@@ -1191,7 +1191,7 @@
     {/if}
   </div>
 
-  <div class="hero-space" />
+  <div class="hero-space"></div>
 
   {#if accountsState.error}
     <div class="status-chip status-chip-error">
