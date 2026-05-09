@@ -1,0 +1,59 @@
+name: Discord Dev Updates
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Discord Components V2
+        run: |
+          COMMITS=$(printf '%s\n' '${{ toJson(github.event.commits) }}' | jq -r '
+            .[] |
+            "[`" + (.id[0:7]) + "`](" + .url + ") " +
+            .message +
+            " - " +
+            .author.name
+          ' | sed ':a;N;$!ba;s/\n/\\n/g')
+          
+          TIME=$(date +"%H:%M UTC")
+
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            "${{ secrets.DISCORD_WEBHOOK }}?with_components=true" \
+            -d "{
+              \"flags\": 32768,
+              \"components\": [
+                {
+                  \"type\": 17,
+                  \"components\": [
+                    {
+                      \"type\": 10,
+                      \"content\": \"### [${{ github.repository }}](https://github.com/${{ github.repository }})\"
+                    },
+                    {
+                      \"type\": 14,
+                      \"spacing\": 2,
+                      \"divider\": true
+                    },
+                    {
+                      \"type\": 10,
+                      \"content\": \"${COMMITS}\"
+                    },
+                    {
+                      \"type\": 14,
+                      \"spacing\": 2,
+                      \"divider\": true
+                    },
+                    {
+                      \"type\": 10,
+                      \"content\": \"-# ${TIME} • by ShindoClient Team.\"
+                    }
+                  ]
+                }
+              ]
+            }"
