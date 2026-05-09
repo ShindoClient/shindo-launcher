@@ -9,11 +9,7 @@ import type {
 import { distributionConfig, sanitizeVersionId } from '../config/distributionConfig';
 import { getFetch } from './fetchClient';
 
-// ─── Internal Types ───────────────────────────────────────────────────────────
-
 type JsonRecord = Record<string, unknown>;
-
-// ─── URL Helpers ──────────────────────────────────────────────────────────────
 
 function toAbsoluteUrl(pathOrUrl: string): string {
   try {
@@ -25,8 +21,6 @@ function toAbsoluteUrl(pathOrUrl: string): string {
   }
 }
 
-// ─── Value Coercions ──────────────────────────────────────────────────────────
-
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
@@ -35,8 +29,6 @@ function asNumber(value: unknown): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
-
-// ─── Network ──────────────────────────────────────────────────────────────────
 
 async function requestJson(url: string): Promise<unknown | null> {
   try {
@@ -131,7 +123,6 @@ function normalizeEntry(entry: JsonRecord, fallbackVersionId: string): CdnClient
 }
 
 function parseManifestObject(manifest: JsonRecord, versionId: string): CdnClientVersionEntry | null {
-  // Array of versions
   const versionsArray =
     (Array.isArray(manifest.versions) ? manifest.versions : null) ||
     (Array.isArray(manifest.clients) ? manifest.clients : null);
@@ -147,7 +138,6 @@ function parseManifestObject(manifest: JsonRecord, versionId: string): CdnClient
     }
   }
 
-  // Map of versions
   if (manifest.versions && typeof manifest.versions === 'object' && !Array.isArray(manifest.versions)) {
     const map = manifest.versions as JsonRecord;
     const candidate = (map[versionId] ?? map.default);
@@ -157,11 +147,8 @@ function parseManifestObject(manifest: JsonRecord, versionId: string): CdnClient
     }
   }
 
-  // Treat the manifest itself as an entry
   return normalizeEntry(manifest, versionId);
 }
-
-// ─── Build Catalog Parsing ────────────────────────────────────────────────────
 
 function asBuildEntry(
   value: JsonRecord,
