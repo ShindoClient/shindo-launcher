@@ -1,29 +1,16 @@
+/** @type {import('prettier').Config} */
 module.exports = {
+  semi: true,
+  singleQuote: true,
+  trailingComma: 'all',
   printWidth: 100,
   tabWidth: 2,
   useTabs: false,
-  semi: true,
-  singleQuote: true,
-  bracketSpacing: true,
-  arrowParens: 'always',
-  endOfLine: 'lf',
-
-  plugins: ['prettier-plugin-svelte', 'prettier-plugin-tailwindcss'],
-
-  // Svelte
-  svelteSortOrder: 'scripts-styles-options-markup',
-  svelteStrictMode: false,
-  svelteAllowShorthand: true,
-  svelteBracketNewLine: true,
-
-  // Tailwind só no renderer
-  tailwindConfig: './packages/renderer/tailwind.config.js',
-
-  // Arquivos que o Prettier deve formatar
+  plugins: ['prettier-plugin-svelte'],
   overrides: [
     {
-      files: 'packages/renderer/**/*.{svelte,css,ts,js}',
-      options: {},
+      files: '*.svelte',
+      options: { parser: 'svelte' },
     },
   ],
 };

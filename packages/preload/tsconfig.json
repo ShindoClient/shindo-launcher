@@ -3,10 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "../../dist/preload",
-    "module": "CommonJS",
     "target": "ES2020",
-    "sourceMap": true,
-    "types": ["electron"]
+    "module": "commonjs",
+    "types": ["electron"],
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src"],
 }

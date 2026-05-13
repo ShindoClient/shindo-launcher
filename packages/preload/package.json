@@ -1,0 +1,14 @@
+{
+  "name": "@shindo/preload",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@shindo/shared": "workspace:*"
+  }
+}

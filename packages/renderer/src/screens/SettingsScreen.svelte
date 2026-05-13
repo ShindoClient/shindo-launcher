@@ -1,384 +1,501 @@
 <script lang="ts">
-  import ChevronLeft from 'lucide-svelte/icons/chevron-left';
-  import Save from 'lucide-svelte/icons/save';
-  import type { JavaValidationResult, LauncherConfig, ReleaseChannel } from '@shindo/shared';
-  import ScrollArea from '../components/ScrollArea.svelte';
-  import { appStore } from '../store/appStore';
-  import { availableLanguages, t } from '../i18n';
-  import { get } from 'svelte/store';
-  import type { Language } from '../i18n';
+  import { appStore } from '$lib/stores/app.svelte';
+  import { configStore } from '$lib/stores/config.svelte';
+  import { t, availableLocales } from '$lib/i18n';
+  import type { JavaValidationResult } from '@shindo/shared';
+  import { ArrowLeft } from '@lucide/svelte';
 
-  const { applyConfigPatch, setScreen } = appStore;
+  let javaValidation = $state<JavaValidationResult | null>(null);
+  let validating = $state(false);
+  let savedFlash = $state(false);
+  let flashTimer = 0;
 
-  $: config = $appStore.config;
-  $: systemMemory = $appStore.systemMemory;
+  const totalMemory = $derived(appStore.memory?.totalGB ?? 0);
+  const maxRam = $derived(Math.max(1, totalMemory - 1));
+  const ramGB = $derived(configStore.ramGB);
 
-  let ramValue = config?.ramGB ?? 4;
-  let jvmArgsDraft = config?.jvmArgs ?? '';
-  let language: Language = config?.language ?? 'en';
-  let releaseChannel: ReleaseChannel = config?.releaseChannel ?? 'stable';
-  let savingJvmArgs = false;
+  async function patch(update: Parameters<typeof configStore.patch>[0]) {
+    await configStore.patch(update);
+    clearTimeout(flashTimer);
+    savedFlash = true;
+    flashTimer = setTimeout(() => {
+      savedFlash = false;
+    }, 1800) as unknown as number;
+  }
 
-  let customPathDraft = config?.javaCustomPath ?? '';
-  let validationResult: JavaValidationResult | null = null;
-  let validationError: string | null = null;
-  let validating = false;
-  let experimentalOpen = false;
-
-  $: if (config) {
-    ramValue = config.ramGB;
-    language = (config.language as Language) ?? 'en';
-    releaseChannel = (config.releaseChannel as ReleaseChannel) ?? 'stable';
-    if (!savingJvmArgs) {
-      jvmArgsDraft = config.jvmArgs ?? '';
-    }
-    if (!validating && !validationResult) {
-      customPathDraft = config.javaCustomPath ?? '';
+  async function browseJava() {
+    const picked = await window.shindo.chooseJavaExecutable();
+    if (picked) {
+      await patch({ javaSource: 'custom', javaCustomPath: picked });
+      javaValidation = null;
     }
   }
 
-  const translate = (key: string, params?: Record<string, string | number>) => get(t)(key, params);
-
-  $: javaPath = config?.javaPath ?? null;
-  $: javaMajor = config?.javaRuntimeMajor ?? null;
-  $: javaSource = config?.javaSource ?? 'auto';
-
-  $: javaCardTitle =
-    javaSource === 'custom' && javaPath
-      ? translate('settings.javaCustomTitle')
-      : translate('settings.javaAutoTitle');
-
-  $: javaCardDetail =
-    javaSource === 'custom' && javaPath
-      ? translate('settings.javaCustomDetail', { path: javaPath })
-      : javaPath
-        ? translate('settings.javaAutoDetailReady', {
-            version: javaMajor ?? '?',
-            path: javaPath,
-          })
-        : translate('settings.javaAutoDetailPending');
-
-  function parseMajor(versionText?: string | null): number | null {
-    if (!versionText) return null;
-    const match = versionText.match(/version\s+"?(\d+)(?:\.(\d+))?/i);
-    if (!match) return null;
-    const primary = Number(match[1]);
-    const secondary = Number(match[2]);
-    if (Number.isFinite(primary) && primary > 1) return primary;
-    if (Number.isFinite(secondary)) return secondary;
-    return null;
-  }
-
-  function handleRamInput(event: Event) {
-    const value = Number((event.target as HTMLInputElement).value);
-    handleRamChange(value).catch(() => undefined);
-  }
-
-  async function handleRamChange(value: number) {
-    ramValue = value;
-    try {
-      await applyConfigPatch({ ramGB: value });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function handleJvmBlur() {
-    if (savingJvmArgs) return;
-    savingJvmArgs = true;
-    try {
-      await applyConfigPatch({ jvmArgs: jvmArgsDraft });
-    } finally {
-      savingJvmArgs = false;
-    }
-  }
-
-  async function handleLanguageChange(event: Event) {
-    const nextLanguage = (event.target as HTMLSelectElement).value as Language;
-    language = nextLanguage;
-    try {
-      await applyConfigPatch({ language: nextLanguage });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function handleReleaseChannelChange(event: Event) {
-    const nextChannel = (event.target as HTMLSelectElement).value as ReleaseChannel;
-    releaseChannel = nextChannel;
-    try {
-      await applyConfigPatch({ releaseChannel: nextChannel, selectedBuild: null });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  function handleCustomPathInput(event: Event) {
-    customPathDraft = (event.target as HTMLInputElement).value;
-    validationResult = null;
-    validationError = null;
-  }
-
-  async function handlePickJavaExecutable() {
-    try {
-      const selected = await window.shindo.chooseJavaExecutable({
-        defaultPath: customPathDraft || config?.javaCustomPath || config?.javaPath || undefined,
-      });
-      if (selected) {
-        customPathDraft = selected;
-        validationResult = null;
-        validationError = null;
-      }
-    } catch (error) {
-      console.error('Failed to pick Java executable', error);
-    }
-  }
-
-  async function handleValidateAndSave() {
-    if (!customPathDraft.trim()) return;
+  async function validateJava() {
+    const path = configStore.data?.javaCustomPath;
+    if (!path) return;
     validating = true;
-    validationError = null;
+    javaValidation = null;
     try {
-      const result = await window.shindo.validateJavaExecutable(customPathDraft.trim());
-      validationResult = result;
-      if (result.ok) {
-        const major = parseMajor(result.versionText) ?? config?.javaRuntimeMajor ?? undefined;
-        await applyConfigPatch({
-          javaSource: 'custom',
-          javaCustomPath: customPathDraft.trim(),
-          javaPath: customPathDraft.trim(),
-          javaRuntimeMajor: major as LauncherConfig['javaRuntimeMajor'],
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      validationError = message;
-      validationResult = null;
+      javaValidation = await window.shindo.validateJavaExecutable(path);
     } finally {
       validating = false;
     }
   }
 
-  async function handleUseAutoJava() {
-    try {
-      await applyConfigPatch({
-        javaSource: 'auto',
-        javaCustomPath: null,
-        javaPath: null,
-        javaRuntimeMajor: undefined,
-      });
-      customPathDraft = '';
-      validationResult = null;
-      validationError = null;
-    } catch (error) {
-      console.error('Failed to reset Java', error);
-    }
+  function back() {
+    appStore.navigate('home');
   }
 </script>
 
-<style lang="scss">
-  @use '../styles/variables' as v;
-  :global(body) {
-    background: #000;
-    color: #fff;
-  }
-</style>
-
-<div class="flex h-full min-h-0 w-full flex-col p-6 text-white">
-  <div class="mb-8 flex flex-wrap items-center justify-between gap-4">
-    <div class="flex items-center gap-4">
-      <button
-        type="button"
-        class="flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium transition hover:bg-gray-800"
-        on:click={() => setScreen('home')}
-      >
-        <ChevronLeft class="h-4 w-4" />
-        <span>{$t('settings.back')}</span>
-      </button>
-      <h1 class="text-2xl font-bold">{$t('settings.title')}</h1>
-    </div>
-    <div class="rounded-lg bg-slate-900/70 px-4 py-2 text-sm text-gray-300">
-      {$t('settings.totalMemory')}: <span class="font-bold text-white">{systemMemory?.totalGB || 8} GB</span>
-    </div>
+<div class="settings-screen">
+  <div class="settings-header">
+    <button class="back-btn" onclick={back}>
+      <ArrowLeft size={16} />
+      {t('settings.back')}
+    </button>
+    <h1 class="settings-title">{t('settings.title')}</h1>
+    {#if savedFlash}
+      <span class="saved-flash">{t('settings.save')} ✓</span>
+    {/if}
   </div>
 
-  <ScrollArea className="flex-1 min-h-0">
-    <div class="mx-auto max-w-4xl space-y-6">
-      <section class="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-[0_20px_60px_rgba(2,6,23,0.8)]">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-xs uppercase tracking-[0.3em] text-gray-400">{$t('settings.ramTitle')}</p>
-            <h2 class="text-2xl font-semibold text-white">{$t('settings.ramDescription')}</h2>
-          </div>
-          <span class="text-xl font-bold text-blue-400">{ramValue} GB</span>
-        </div>
-        <div class="mt-4 space-y-4">
-          <input
-            type="range"
-            min="1"
-            max={systemMemory?.totalGB || 8}
-            step="1"
-            value={ramValue}
-            class="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-blue-500"
-            on:input={handleRamInput}
-          />
-          <div class="flex justify-between text-xs text-gray-500">
-            <span>1 GB</span>
-            <span>{systemMemory?.totalGB || 8} GB</span>
+  {#if configStore.data}
+    <div class="settings-body">
+      <!-- ── Memory ─────────────────────────────────────────────────────── -->
+      <section class="settings-section">
+        <h2 class="section-title">{t('settings.section.memory')}</h2>
+
+        <div class="field-row">
+          <label class="field-label" for="ram-slider">
+            {t('settings.ram.label')}
+            <span class="field-label-hint">{t('settings.ram.system', { total: totalMemory })}</span>
+          </label>
+          <div class="ram-control">
+            <input
+              id="ram-slider"
+              type="range"
+              min={1}
+              max={maxRam}
+              step={1}
+              value={ramGB}
+              oninput={(e) => patch({ ramGB: Number(e.target.value) })}
+              class="slider"
+            />
+            <span class="ram-value">{ramGB} {t('settings.ram.unit')}</span>
           </div>
         </div>
       </section>
 
-      <section class="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-950 p-6 shadow-[0_18px_60px_rgba(2,6,23,0.7)]">
-        <div class="mb-3 flex items-start justify-between gap-4">
-          <div>
-            <p class="text-xs uppercase tracking-[0.3em] text-gray-400">{$t('settings.runtimeTitle')}</p>
-            <h2 class="text-2xl font-semibold text-white">{javaCardTitle}</h2>
-            <p class="text-sm text-gray-400 mt-2">{javaCardDetail}</p>
-            {#if javaPath}
-              <p class="text-xs text-gray-500 mt-1">{$t('settings.javaPathLabel')}: {javaPath}</p>
-            {:else}
-              <p class="text-xs text-gray-500 mt-1">{$t('settings.javaAutoPendingHint')}</p>
+      <!-- ── Java ──────────────────────────────────────────────────────── -->
+      <section class="settings-section">
+        <h2 class="section-title">{t('settings.section.java')}</h2>
+
+        <div class="field-row">
+          <label class="field-label">{t('settings.java.source')}</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input
+                type="radio"
+                name="javaSource"
+                value="auto"
+                checked={configStore.data.javaSource === 'auto'}
+                onchange={() => patch({ javaSource: 'auto' })}
+              />
+              {t('settings.java.auto')}
+            </label>
+            <label class="radio-label">
+              <input
+                type="radio"
+                name="javaSource"
+                value="custom"
+                checked={configStore.data.javaSource === 'custom'}
+                onchange={() => patch({ javaSource: 'custom' })}
+              />
+              {t('settings.java.custom')}
+            </label>
+          </div>
+        </div>
+
+        {#if configStore.data.javaSource === 'custom'}
+          <div class="field-row field-row--vertical">
+            <label class="field-label">{t('settings.java.path')}</label>
+            <div class="path-control">
+              <input
+                type="text"
+                class="text-input"
+                value={configStore.data.javaCustomPath ?? ''}
+                placeholder="/usr/lib/jvm/java-8-openjdk/bin/java"
+                onchange={(e) =>
+                  patch({ javaCustomPath: (e.target as HTMLInputElement).value || null })}
+                readonly
+              />
+              <button class="btn btn--secondary" onclick={browseJava}>
+                {t('settings.java.browse')}
+              </button>
+              <button
+                class="btn btn--secondary"
+                onclick={validateJava}
+                disabled={validating || !configStore.data.javaCustomPath}
+              >
+                {validating ? '...' : t('settings.java.validate')}
+              </button>
+            </div>
+            {#if javaValidation}
+              <span
+                class="java-validation"
+                class:java-validation--ok={javaValidation.ok}
+                class:java-validation--err={!javaValidation.ok}
+              >
+                {javaValidation.ok
+                  ? t('settings.java.valid', {
+                      version: javaValidation.versionText?.split('\n')[0] ?? '',
+                    })
+                  : t('settings.java.invalid', { error: javaValidation.error ?? '' })}
+              </span>
             {/if}
           </div>
-        </div>
-        <div class="mt-6">
-          <button
-            type="button"
-            class="flex w-full items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-gray-200 transition hover:border-slate-700"
-            on:click={() => (experimentalOpen = !experimentalOpen)}
-          >
-            <span>{$t('settings.javaExperimentalTitle')}</span>
-            <span class="text-xs text-gray-400">{experimentalOpen ? '−' : '+'}</span>
-          </button>
+        {/if}
+      </section>
 
-          {#if experimentalOpen}
-            <div class="mt-4 space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-              <div class="flex flex-col gap-3 sm:flex-row">
-                <input
-                  type="text"
-                  class="flex-1 rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                  bind:value={customPathDraft}
-                  on:input={handleCustomPathInput}
-                  placeholder={$t('settings.javaCustomPlaceholder')}
-                />
-                <button
-                  type="button"
-                  class="rounded-lg bg-blue-500 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-blue-400"
-                  on:click={handlePickJavaExecutable}
-                >
-                  {$t('settings.runtimeActionLocate')}
-                </button>
-              </div>
+      <!-- ── Advanced ──────────────────────────────────────────────────── -->
+      <section class="settings-section">
+        <h2 class="section-title">{t('settings.section.advanced')}</h2>
 
-              <div class="flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-2 rounded-lg border border-transparent bg-blue-500 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-blue-400 disabled:opacity-60"
-                  on:click={handleValidateAndSave}
-                  disabled={!customPathDraft.trim() || validating}
-                >
-                  {validating ? $t('settings.jvmSaving') : $t('settings.javaValidate')}
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-gray-200 transition hover:border-slate-500 disabled:opacity-60"
-                  on:click={handleUseAutoJava}
-                  disabled={config?.javaSource === 'auto' && !config?.javaCustomPath}
-                >
-                  {$t('settings.javaUseAuto')}
-                </button>
-                <span class="text-[11px] text-gray-500">{$t('settings.javaExperimentalHint')}</span>
-              </div>
-
-              {#if validationResult}
-                <div
-                  class={`rounded-lg border p-4 ${validationResult.ok ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-100' : 'border-amber-500/40 bg-amber-500/5 text-amber-100'}`}
-                >
-                  <p class="font-semibold">
-                    {validationResult.ok
-                      ? $t('settings.javaValidationOk')
-                      : $t('settings.javaValidationFail')}
-                  </p>
-                  {#if validationResult.versionText}
-                    <pre class="mt-2 whitespace-pre-wrap text-xs text-gray-200">{validationResult.versionText}</pre>
-                  {/if}
-                  {#if validationResult.error}
-                    <p class="mt-1 text-xs text-red-200">{validationResult.error}</p>
-                  {/if}
-                </div>
-              {/if}
-
-              {#if validationError}
-                <p class="text-xs text-red-300">{validationError}</p>
-              {/if}
-            </div>
-          {/if}
+        <div class="field-row field-row--vertical">
+          <label class="field-label" for="jvm-args">{t('settings.jvm.label')}</label>
+          <textarea
+            id="jvm-args"
+            class="text-input text-input--mono"
+            rows={3}
+            value={configStore.data.jvmArgs}
+            placeholder={t('settings.jvm.placeholder')}
+            onchange={(e) => patch({ jvmArgs: (e.target as HTMLTextAreaElement).value })}
+          ></textarea>
         </div>
       </section>
 
-      <section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-[0_18px_60px_rgba(2,6,23,0.65)]">
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="text-2xl font-semibold text-white">{$t('settings.jvmArgsTitle')}</h2>
-          {#if savingJvmArgs}
-            <span class="inline-flex items-center gap-2 text-sm text-emerald-400">
-              <Save class="h-4 w-4 animate-spin" />
-              {$t('settings.jvmSaving')}
-            </span>
-          {/if}
-        </div>
-        <p class="text-sm text-gray-400 mb-4">{$t('settings.jvmArgsDescription')}</p>
-        <textarea
-          class="h-32 w-full resize-none rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 font-mono text-sm text-white outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
-          bind:value={jvmArgsDraft}
-          on:blur={() => handleJvmBlur()}
-          placeholder="-Xmx4G -XX:+UseG1GC"
-        />
-        <div class="mt-3 text-xs text-gray-500">{$t('settings.jvmArgsTip')}</div>
-      </section>
+      <!-- ── Launcher ──────────────────────────────────────────────────── -->
+      <section class="settings-section">
+        <h2 class="section-title">{t('settings.section.launcher')}</h2>
 
-      <section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-[0_18px_60px_rgba(2,6,23,0.65)]">
-        <div class="mb-5">
-          <p class="text-xs uppercase tracking-[0.3em] text-gray-400">Release Channel</p>
-          <h2 class="text-2xl font-semibold text-white">Update stream</h2>
-          <p class="text-sm text-gray-400 mt-2">Controls which build channel the launcher tracks by default.</p>
-        </div>
-        <select
-          class="w-full rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
-          value={releaseChannel}
-          on:change={handleReleaseChannelChange}
-        >
-          <option value="stable">Stable</option>
-          <option value="snapshot">Snapshot</option>
-          <option value="dev">Dev</option>
-        </select>
-      </section>
-
-      <section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-[0_18px_60px_rgba(2,6,23,0.65)]">
-        <div class="flex flex-col gap-3">
-          <div>
-            <p class="text-xs uppercase tracking-[0.3em] text-gray-400">{$t('settings.interfaceTitle')}</p>
-            <h2 class="text-2xl font-semibold text-white">{$t('settings.interfaceDescription')}</h2>
-          </div>
-          <p class="text-sm text-gray-400">{$t('settings.logsDisabled')}</p>
-        </div>
-        <div class="mt-5">
-          <label class="text-sm font-semibold text-white" for="language-select">
-            {$t('settings.languageLabel')}
-          </label>
-          <p class="text-xs text-gray-400 mb-3">{$t('settings.languageDescription')}</p>
+        <div class="field-row">
+          <label class="field-label" for="lang-select">{t('settings.language.label')}</label>
           <select
-            class="w-full rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
-            id="language-select"
-            value={language}
-            on:change={handleLanguageChange}
+            id="lang-select"
+            class="select-input"
+            value={configStore.data.language}
+            onchange={(e) =>
+              patch({ language: (e.target as HTMLSelectElement).value as 'en' | 'pt' })}
           >
-            {#each availableLanguages as option}
-              <option value={option.code}>{option.flag} {option.label}</option>
+            {#each availableLocales as locale}
+              <option value={locale.code}>{locale.flag} {locale.label}</option>
             {/each}
           </select>
         </div>
+
+        <div class="field-row">
+          <label class="field-label" for="channel-select">{t('settings.channel.label')}</label>
+          <select
+            id="channel-select"
+            class="select-input"
+            value={configStore.data.releaseChannel}
+            onchange={(e) =>
+              patch({
+                releaseChannel: (e.target as HTMLSelectElement).value as
+                  | 'stable'
+                  | 'snapshot'
+                  | 'dev',
+              })}
+          >
+            <option value="stable">{t('settings.channel.stable')}</option>
+            <option value="snapshot">{t('settings.channel.snapshot')}</option>
+            <option value="dev">{t('settings.channel.dev')}</option>
+          </select>
+        </div>
+
+        <div class="field-row">
+          <label class="field-label" for="show-logs">{t('settings.showLogs.label')}</label>
+          <input
+            id="show-logs"
+            type="checkbox"
+            class="checkbox-input"
+            checked={configStore.data.showLogsOnLaunch}
+            onchange={(e) => patch({ showLogsOnLaunch: (e.target as HTMLInputElement).checked })}
+          />
+        </div>
       </section>
     </div>
-  </ScrollArea>
+  {:else}
+    <div class="settings-loading">{t('common.loading')}</div>
+  {/if}
 </div>
+
+<style lang="scss">
+  .settings-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--color-bg-app);
+  }
+
+  .settings-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 32px 16px;
+    border-bottom: 1px solid var(--color-border-subtle);
+    flex-shrink: 0;
+  }
+
+  .back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition:
+      color 0.1s,
+      background 0.1s;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--color-bg-hover);
+    }
+  }
+
+  .settings-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+
+  .saved-flash {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--color-success);
+    font-weight: 600;
+    animation: fade-in-out 1.8s ease forwards;
+  }
+
+  @keyframes fade-in-out {
+    0% {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    15% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    75% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  .settings-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    margin: 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    &--vertical {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+  }
+
+  .field-label {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    flex-shrink: 0;
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .field-label-hint {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-weight: 400;
+  }
+
+  .ram-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+  }
+
+  .slider {
+    flex: 1;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
+  .ram-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    min-width: 40px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .radio-group {
+    display: flex;
+    gap: 16px;
+  }
+
+  .radio-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+
+    input {
+      accent-color: var(--color-accent);
+    }
+  }
+
+  .path-control {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    align-items: center;
+  }
+
+  .text-input {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text-primary);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.1s;
+    width: 100%;
+
+    &:focus {
+      border-color: var(--color-accent);
+    }
+
+    &--mono {
+      font-family: monospace;
+      resize: vertical;
+      min-height: 60px;
+    }
+  }
+
+  .select-input {
+    padding: 7px 10px;
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text-primary);
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    min-width: 140px;
+
+    &:focus {
+      border-color: var(--color-accent);
+    }
+
+    option {
+      background: var(--color-bg-surface);
+    }
+  }
+
+  .checkbox-input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
+  .java-validation {
+    font-size: 11px;
+    font-weight: 600;
+
+    &--ok {
+      color: var(--color-success);
+    }
+    &--err {
+      color: var(--color-danger);
+    }
+  }
+
+  .btn {
+    padding: 7px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.1s;
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    &--secondary {
+      background: var(--color-bg-surface);
+      color: var(--color-text-secondary);
+      &:hover:not(:disabled) {
+        background: var(--color-bg-hover);
+      }
+    }
+  }
+
+  .settings-loading {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    font-size: 13px;
+  }
+</style>

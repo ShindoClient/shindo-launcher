@@ -19,7 +19,7 @@ jobs:
             " - " +
             .author.name
           ' | sed ':a;N;$!ba;s/\n/\\n/g')
-          
+
           TIME=$(date +"%H:%M UTC")
 
           curl -X POST \

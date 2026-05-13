@@ -4,6 +4,6 @@
     { "path": "./packages/shared" },
     { "path": "./packages/preload" },
     { "path": "./packages/main" },
-    { "path": "./packages/renderer" }
-  ]
+    { "path": "./packages/renderer" },
+  ],
 }

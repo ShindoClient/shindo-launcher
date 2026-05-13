@@ -12,15 +12,33 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
+      $lib: path.resolve(__dirname, 'src/lib'),
     },
+  },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        // Design tokens auto-imported in all .scss files
+        additionalData: `@use 'sass:color';`,
+      },
+    },
+  },
+  build: {
+    outDir: path.resolve(__dirname, '../../dist/renderer'),
+    emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve('./index.html'),
+        logs: path.resolve('./logs.html'),
+      },
+    },
+    sourcemap: false,
+    minify: 'esbuild',
+    target: 'chrome120', // Electron 36 uses Chrome 130+, conservative target
   },
   server: {
     host: devServerHost,
     port: devServerPort,
     strictPort: true,
-  },
-  build: {
-    outDir: path.resolve(__dirname, '../../dist/renderer'),
-    emptyOutDir: true,
   },
 });

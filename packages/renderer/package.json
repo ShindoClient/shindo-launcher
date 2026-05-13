@@ -1,5 +1,5 @@
 {
-  "name": "shindo-launcher-renderer",
+  "name": "@shindo/renderer",
   "private": true,
   "type": "module"
 }

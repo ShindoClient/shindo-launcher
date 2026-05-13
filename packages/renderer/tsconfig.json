@@ -1,11 +1,19 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "moduleResolution": "Bundler",
-    "allowImportingTsExtensions": false,
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
     "noEmit": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["svelte", "vite/client"]
+    "paths": {
+      "$lib/*": ["./src/lib/*"]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte"]
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/shared" }
+  ]
 }

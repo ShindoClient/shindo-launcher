@@ -1,11 +1,112 @@
-@use './variables';
-@use './mixins';
-@use './animations';
-@use './reset';
+// ── Reset ─────────────────────────────────────────────────────────────────────
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap');
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+// ── Design tokens ─────────────────────────────────────────────────────────────
+:root {
+  // Background
+  --color-bg-app: #0d1117;
+  --color-bg-titlebar: #0a0e14;
+  --color-bg-surface: #161b22;
+  --color-bg-elevated: #1c2230;
+  --color-bg-hover: rgba(255 255 255 / 0.07);
+  --color-bg-input: #0d1117;
+  --color-bg-tag: rgba(255 255 255 / 0.06);
+
+  // Borders
+  --color-border: rgba(255 255 255 / 0.12);
+  --color-border-subtle: rgba(255 255 255 / 0.06);
+
+  // Text
+  --color-text-primary: #f0f6fc;
+  --color-text-secondary: #8b949e;
+  --color-text-muted: #484f58;
+
+  // Accent (overridable per theme)
+  --color-accent: #2f81f7;
+  --color-accent-rgb: 47 129 247;
+
+  // Semantic
+  --color-success: #3fb950;
+  --color-warn: #d29922;
+  --color-danger: #f85149;
+  --color-danger-rgb: 248 81 73;
+
+  // Typography
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+// ── Base ──────────────────────────────────────────────────────────────────────
+html,
+body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+// ── Scrollbar ─────────────────────────────────────────────────────────────────
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+
+  &:hover {
+    background: rgba(255 255 255 / 0.2);
+  }
+}
+
+// ── Selection ─────────────────────────────────────────────────────────────────
+::selection {
+  background: rgba(var(--color-accent-rgb) / 0.35);
+  color: var(--color-text-primary);
+}
+
+// ── Focus ring (keyboard only) ────────────────────────────────────────────────
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+// ── Drag region override ──────────────────────────────────────────────────────
+[data-no-drag] {
+  -webkit-app-region: no-drag;
+}

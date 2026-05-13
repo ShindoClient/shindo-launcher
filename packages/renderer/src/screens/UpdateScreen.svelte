@@ -1,86 +1,145 @@
 <script lang="ts">
-  import Loader from 'lucide-svelte/icons/loader';
-  import RefreshCw from 'lucide-svelte/icons/refresh-cw';
-  import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
-  import { appStore } from '../store/appStore';
-
-  const { startUpdate } = appStore;
-
-  $: update = $appStore.update;
-  $: updateInFlight = $appStore.updateInFlight;
-  $: showError = update.status === 'error';
+  import { updateStore } from '$lib/stores/update.svelte';
+  import { t } from '$lib/i18n';
 </script>
 
-<div class="flex h-full w-full flex-col items-center justify-center px-6 text-slate-100">
-  <div class="w-full max-w-md">
-    <div class="mb-8 text-center">
-      {#if showError}
-        <div
-          class="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10"
-        >
-          <AlertTriangle class="h-10 w-10 text-red-400" />
-        </div>
-      {:else}
-        <div
-          class="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-indigo-500/10"
-        >
-          <Loader class="h-10 w-10 animate-spin text-indigo-400" />
-        </div>
-      {/if}
+<div class="update-screen">
+  <div class="update-card">
+    <img src="/assets/logo.png" alt="Shindo" class="update-logo" />
+    <h1 class="update-title">
+      {updateStore.isError ? t('update.error') : t('update.title')}
+    </h1>
 
-      <h1 class="mb-3 text-2xl font-bold text-white">Updating Shindo Launcher</h1>
-      <p class="mb-6 text-slate-400">
-        {#if showError}
-          {update.errorMessage ?? 'Please try again in a moment.'}
-        {:else}
-          {update.message}
-        {/if}
-      </p>
-    </div>
-
-    {#if !showError}
-      <div class="space-y-4">
-        <div>
-          <div class="mb-2 flex justify-between text-sm text-slate-400">
-            <span>Progress</span>
-            <span class="font-semibold text-white">{Math.round(update.percent)}%</span>
-          </div>
-          <div class="h-3 overflow-hidden rounded-full bg-slate-800">
-            <div
-              class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all duration-300 ease-out"
-              style={`width: ${Math.min(100, Math.max(0, update.percent))}%`}
-            ></div>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <div class="rounded-lg bg-slate-800/30 p-3">
-            <div class="text-xs text-slate-400">Current Step</div>
-            <div class="text-sm font-semibold text-white">{update.step || '--'}</div>
-          </div>
-          <div class="rounded-lg bg-slate-800/30 p-3">
-            <div class="text-xs text-slate-400">Phases</div>
-            <div class="text-sm font-semibold text-white">
-              {update.phaseIndex} / {update.phaseTotal}
-            </div>
-          </div>
-        </div>
+    {#if updateStore.isError}
+      <p class="update-error-msg">{updateStore.errorMsg}</p>
+      <div class="update-actions">
+        <button class="btn btn--primary" onclick={() => updateStore.run()}>
+          {t('update.retry')}
+        </button>
       </div>
     {:else}
-      <div class="text-center">
-        <button
-          type="button"
-          class="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-indigo-900/40"
-          on:click={() => startUpdate()}
-          disabled={updateInFlight}
-        >
-          <RefreshCw class={`h-4 w-4 ${updateInFlight ? 'animate-spin' : ''}`} />
-          {updateInFlight ? 'Restarting...' : 'Try Again'}
-        </button>
-        <p class="mt-4 text-xs text-slate-500">
-          If the problem persists, check your internet connection and try again.
-        </p>
+      <div class="update-progress-wrap">
+        <div class="update-progress-bar">
+          <div class="update-progress-fill" style="width: {updateStore.percent}%"></div>
+        </div>
+        <div class="update-progress-meta">
+          <span class="update-message">
+            {updateStore.isDone ? t('update.done') : updateStore.message}
+          </span>
+          {#if updateStore.phaseTotal > 0}
+            <span class="update-phase">
+              {t('update.phase', {
+                current: updateStore.phaseIndex,
+                total: updateStore.phaseTotal,
+              })}
+            </span>
+          {/if}
+        </div>
       </div>
     {/if}
   </div>
 </div>
+
+<style lang="scss">
+  .update-screen {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg-app);
+  }
+
+  .update-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    width: 420px;
+    padding: 48px 40px;
+  }
+
+  .update-logo {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    opacity: 0.9;
+  }
+
+  .update-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+    letter-spacing: 0.02em;
+  }
+
+  .update-progress-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .update-progress-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--color-bg-surface);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .update-progress-fill {
+    height: 100%;
+    background: var(--color-accent);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .update-progress-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .update-message {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+  }
+
+  .update-phase {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .update-error-msg {
+    font-size: 13px;
+    color: var(--color-danger);
+    text-align: center;
+    margin: 0;
+    max-width: 340px;
+  }
+
+  .update-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.12s;
+
+    &:hover {
+      opacity: 0.85;
+    }
+    &--primary {
+      background: var(--color-accent);
+      color: #fff;
+    }
+  }
+</style>
