@@ -3,6 +3,6 @@
   "private": true,
   "version": "0.1.0",
   "type": "commonjs",
-  "main": "../../dist/shared/index.js",
-  "types": "src/index.ts"
+  "main": "../../../dist/shared/index.js",
+  "types": "../../../dist/shared/index.d.ts"
 }

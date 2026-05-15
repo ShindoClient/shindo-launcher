@@ -70,7 +70,7 @@ async function main() {
     cwd: path.join(ROOT, 'packages/renderer'),
   });
 
-  const mainEntry = path.join(ROOT, 'dist/main/index.js');
+  const mainEntry = path.join(ROOT, 'dist/main/main.js');
   const preloadEntry = path.join(ROOT, 'dist/preload/index.js');
 
   console.log('[dev] Waiting for build outputs...');

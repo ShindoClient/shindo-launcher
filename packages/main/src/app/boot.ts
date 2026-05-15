@@ -6,11 +6,13 @@ import { logMessage } from '../services/log';
 export async function boot(): Promise<void> {
   logMessage('info', `Booting Shindo Launcher v${app.getVersion()}`);
 
-  const mainWindow = await createMainWindow();
+  let mainWindow: any;
 
   registerAllHandlers({
     getMainWindow: () => mainWindow,
   });
+
+  mainWindow = await createMainWindow();
 
   // macOS: recreate window when dock icon is clicked
   app.on('activate', async () => {

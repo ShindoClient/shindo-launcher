@@ -4,8 +4,12 @@
     "rootDir": "src",
     "outDir": "../../dist/preload",
     "target": "ES2020",
-    "module": "commonjs",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "types": ["electron"],
+    "paths": {
+      "@shindo/shared": ["../../dist/shared/index.d.ts"]
+    }
   },
   "include": ["src"],
 }
