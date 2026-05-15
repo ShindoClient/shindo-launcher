@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "commonjs",
+  "main": "../../dist/main/main.js",
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch"

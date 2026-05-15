@@ -5,14 +5,9 @@ import { logMessage } from '../services/log';
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
 function resolveIconPath(): string | null {
-  const icons: Partial<Record<NodeJS.Platform, string>> = {
-    win32: 'logo.ico',
-    darwin: 'logo.icns',
-    linux: 'logo.png',
-  };
-  const file = icons[process.platform] ?? 'logo.png';
+  const file = 'logo.png';
   if (isDev) {
-    return path.resolve(__dirname, '../../../renderer/src/assets', file);
+    return path.resolve(__dirname, '../../../logo.png');
   }
   return path.join(process.resourcesPath, file);
 }

@@ -1,5 +1,13 @@
 {
   "name": "@shindo/renderer",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@shindo/shared": "workspace:*"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  }
 }
