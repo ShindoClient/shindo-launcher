@@ -1,0 +1,28 @@
+{
+  "name": "shindo-launcher",
+  "version": "0.2.9",
+  "type": "module",
+  "description": "Shindo Client launcher built with Electrobun and Svelte 5",
+  "scripts": {
+    "fixed": "vite build && electrobun dev",
+    "start": "WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 bun fixed",
+    "dev": "electrobun dev --watch",
+    "dev:hmr": "concurrently \"bun run hmr\" \"bun run start\"",
+    "hmr": "vite --port 5173",
+    "build:canary": "vite build && electrobun build --env=canary"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^1.16.0",
+    "electrobun": "1.18.1",
+    "minecraft-launcher-core": "^3.18.2"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
+    "@types/bun": "latest",
+    "@types/three": "^0.184.1",
+    "concurrently": "^9.2.1",
+    "svelte": "^5.55.7",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.2"
+  }
+}
