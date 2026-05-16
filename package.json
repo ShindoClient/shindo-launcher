@@ -4,11 +4,12 @@
   "type": "module",
   "description": "Shindo Client launcher built with Electrobun and Svelte 5",
   "scripts": {
-    "fixed": "vite build && electrobun dev",
+    "fixed": "vite build && vite build --config vite.login.config.ts && electrobun dev",
     "start": "WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 bun fixed",
     "dev": "electrobun dev --watch",
     "dev:hmr": "concurrently \"bun run hmr\" \"bun run start\"",
     "hmr": "vite --port 5173",
+    "build:stable": "vite build && electrobun build --env=stable",
     "build:canary": "vite build && electrobun build --env=canary"
   },
   "dependencies": {

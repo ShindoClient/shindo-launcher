@@ -17,6 +17,7 @@ export const defaultSettings: LauncherSettings = {
 	ramMaxMb: 4096,
 	javaMode: "auto",
 	locale: "en",
+	theme: "dark",
 };
 
 export const appState = $state({

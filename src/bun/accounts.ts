@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { BrowserView, BrowserWindow } from "electrobun/bun";
+import { BrowserWindow, BrowserView } from "electrobun/bun";
 import { homedir } from "node:os";
 import type { AccountProfile, AccountType } from "../shared/types";
+import type { LoginRpcSchema } from "../shared/loginTypes";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -271,21 +272,20 @@ async function fetchMinecraftProfile(
   );
 }
 
-// ─── Microsoft OAuth window (ElectroBun) ──────────────────────────────────────
+// ─── Microsoft OAuth window (ElectroBun + CEF webview tag) ───────────────────
 //
-// Electron used webContents.on('will-redirect') to intercept the redirect to
-// login.live.com/oauth20_desktop.srf before the navigation happened.
+// Architecture:
+//   1. BrowserWindow loads a local HTML page (views://loginview/index.html)
+//   2. That page contains an <electrobun-webview renderer="cef"> pointing to
+//      the Microsoft OAuth URL
+//   3. The webview's preload script runs in the CEF process — it intercepts
+//      the redirect to oauth20_desktop.srf and calls __electrobunSendToHost()
+//   4. The host page receives the host-message event and sends it to bun
+//      via the login RPC (notifyOAuthRedirect request)
+//   5. Bun resolves the promise with the code and closes the window
 //
-// ElectroBun equivalent:
-//   1. setNavigationRules — blocks the redirect URI at native level so the
-//      webview never actually navigates to it (avoids a 404 flash).
-//   2. webview.on('will-navigate') — fires for every navigation attempt,
-//      including blocked ones. We read `event.data.url` to extract the auth
-//      code or error from the query string.
-//   3. BrowserWindow.on('close') — handles user cancellation.
-//
-// ElectroBun has no modal/parent concept, so we use setAlwaysOnTop to keep
-// the login window above the launcher.
+// This completely replaces the previous approach of callback HTTP servers,
+// navigation event guessing, and executeJavascript polling.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function performMicrosoftOAuth(): Promise<MicrosoftTokenResponse> {
@@ -296,225 +296,111 @@ async function performMicrosoftOAuth(): Promise<MicrosoftTokenResponse> {
   authUrl.searchParams.set("scope", MICROSOFT_SCOPE);
   authUrl.searchParams.set("prompt", "select_account");
 
-  return new Promise<MicrosoftTokenResponse>((resolve, reject) => {
-    let completed = false;
-
-    // A minimal RPC is required to enable rpc.request.evaluateJavascriptWithResponse,
-    // which is the only way to read window.location.href from the bun side.
-    const loginRpc = BrowserView.defineRPC<{
-      bun: { requests: Record<string, never>; messages: Record<string, never> };
-      webview: {
-        requests: Record<string, never>;
-        messages: Record<string, never>;
-      };
-    }>({
-      maxRequestTime: 10_000,
-      handlers: { requests: {} },
-    });
-
-    const loginWindow = new BrowserWindow({
-      title: "Entrar com Microsoft",
-      url: authUrl.toString(),
-      frame: { width: 460, height: 640, x: 400, y: 180 },
-      titleBarStyle: "default",
-      rpc: loginRpc,
-    });
-
-    // Do NOT block the redirect URI via setNavigationRules.
-    // On Linux/CEF, blocking a URL suppresses all navigation events for it,
-    // so the code never arrives. Instead we let the navigation happen and
-    // intercept it on did-navigate (which fires before the page renders).
-    console.log(
-      "[OAUTH] Navigation rules: none (redirect URI allowed to fire events)",
-    );
-
-    loginWindow.setAlwaysOnTop(true);
-    console.log("[OAUTH] Login window opened:", authUrl.toString());
-
-    function cleanup(): void {
-      // Schedule close on next tick — closing synchronously inside a navigation
-      // callback freezes CEF on Linux while it is still processing the event.
-      console.log("[OAUTH] cleanup() — scheduling close via setTimeout");
-      setTimeout(() => {
-        console.log("[OAUTH] Closing login window now");
-        try {
-          loginWindow.close();
-        } catch (err) {
-          console.error("[OAUTH] Error closing login window:", err);
-        }
-      }, 0);
-    }
-
-    // ── URL extraction ────────────────────────────────────────────────────────
-    // Confirmed shape from Linux/CEF logs:
-    //   { name, data: { detail: string }, responseWasSet }
-    //
-    // detail is either:
-    //   - JSON string '{"url":"https://...","allowed":true}'  (will-navigate)
-    //   - plain URL string "https://..."                      (did-navigate etc.)
-
-    function extractUrl(event: unknown, eventName: string): string | undefined {
-      const e = event as Record<string, unknown> | null | undefined;
-      const data = e?.data as Record<string, unknown> | null | undefined;
-      const detail = data?.detail;
-
-      if (typeof detail !== "string") {
-        console.log(
-          `[OAUTH] ${eventName} unexpected shape:`,
-          JSON.stringify(event),
-        );
-        return undefined;
-      }
-
-      // will-navigate: detail is a JSON string containing { url, allowed }
-      try {
-        const inner = JSON.parse(detail) as Record<string, unknown>;
-        if (typeof inner.url === "string") {
-          console.log(`[OAUTH] ${eventName} url=${inner.url}`);
-          return inner.url;
-        }
-      } catch {
-        // Not JSON — detail is already a plain URL string
-      }
-
-      console.log(`[OAUTH] ${eventName} detail=${detail}`);
-      return detail;
-    }
-
-    // ── Navigation handler ────────────────────────────────────────────────────
-
-    function handleNavigation(navUrl: string | undefined): void {
-      if (completed || !navUrl) return;
-      if (!navUrl.startsWith(REDIRECT_URI)) return;
-
-      console.log(`[OAUTH] Redirect URI matched: ${navUrl}`);
-
-      let parsed: URL;
-      try {
-        parsed = new URL(navUrl);
-      } catch (err) {
-        console.error("[OAUTH] Failed to parse redirect URL:", err);
-        return;
-      }
-
-      const code = parsed.searchParams.get("code");
-      const oauthError = parsed.searchParams.get("error");
-
-      console.log(
-        `[OAUTH] code=${code ? "present" : "null"} oauthError=${oauthError}`,
-      );
-
-      if (code) {
-        completed = true;
-        console.log(
-          "[OAUTH] Auth code received, closing window and exchanging token...",
-        );
-        cleanup();
-        exchangeCodeForTokens(code)
-          .then((tokens) => {
-            console.log("[OAUTH] Token exchange successful");
-            resolve(tokens);
-          })
-          .catch((err) => {
-            console.error("[OAUTH] Token exchange failed:", err);
-            reject(err);
-          });
-      } else if (oauthError) {
-        completed = true;
-        console.error(`[OAUTH] Auth error from Microsoft: ${oauthError}`);
-        cleanup();
-        reject(new Error(`Microsoft login failed: ${oauthError}`));
-      }
-    }
-
-    // ── Strategy: event listeners + location polling ─────────────────────────
-    // On Linux/CEF, the final redirect to oauth20_desktop.srf?code=... does not
-    // reliably fire any navigation event. We use two complementary approaches:
-    //
-    // 1. Navigation events — catch redirects that do fire events
-    // 2. Polling via executeJavascript — read window.location.href directly
-    //    after each navigation settles, catches what events miss
-
-    loginWindow.webview.on("will-navigate", (event) => {
-      const url = extractUrl(event, "will-navigate");
-      handleNavigation(url);
-      // Each navigation may lead to the redirect — schedule a poll after settle
-      schedulePoll();
-    });
-
-    loginWindow.webview.on("did-navigate", (event) => {
-      const url = extractUrl(event, "did-navigate");
-      handleNavigation(url);
-      schedulePoll();
-    });
-
-    loginWindow.webview.on("did-navigate-in-page", (event) => {
-      const url = extractUrl(event, "did-navigate-in-page");
-      handleNavigation(url);
-      schedulePoll();
-    });
-
-    loginWindow.webview.on("did-commit-navigation", (event) => {
-      const url = extractUrl(event, "did-commit-navigation");
-      handleNavigation(url);
-      schedulePoll();
-    });
-
-    loginWindow.webview.on("dom-ready", (_event) => {
-      console.log("[OAUTH] dom-ready — polling location");
-      pollLocation();
-    });
-
-    // ── Polling ───────────────────────────────────────────────────────────────
-    // Read window.location.href from inside the webview. This catches the
-    // oauth20_desktop.srf redirect that CEF swallows without emitting events.
-
-    let pollTimer: ReturnType<typeof setTimeout> | null = null;
-
-    function schedulePoll(): void {
-      if (completed) return;
-      if (pollTimer) clearTimeout(pollTimer);
-      // Wait 300ms for the navigation to settle before reading location
-      pollTimer = setTimeout(() => {
-        pollTimer = null;
-        pollLocation();
-      }, 300);
-    }
-
-    function pollLocation(): void {
-      if (completed) return;
-      // evaluateJavascriptWithResponse requires RPC to be configured on the window.
-      // loginWindow is created with loginRpc above so this method is available.
-      loginWindow.webview.rpc.request
-        .evaluateJavascriptWithResponse({ script: "window.location.href" })
-        .then((href: unknown) => {
-          if (typeof href === "string") {
-            console.log(`[OAUTH] poll location=${href}`);
-            handleNavigation(href);
-            // Keep polling until completed or window closes
-            if (!completed) {
-              pollTimer = setTimeout(pollLocation, 500);
-            }
-          }
-        })
-        .catch((err: unknown) => {
-          // Window was closed or JS execution failed — stop polling silently
-          console.log("[OAUTH] poll error (window may be closed):", err);
-        });
-    }
-
-    // Start polling immediately in case the window is already at the redirect
-    schedulePoll();
-
-    // User closed the window manually.
-    loginWindow.on("close", () => {
-      console.log(`[OAUTH] Window closed, completed=${completed}`);
-      if (pollTimer) clearTimeout(pollTimer);
-      if (!completed) {
-        reject(new Error("Login cancelled by user."));
-      }
-    });
+  let resolveOAuth!: (tokens: MicrosoftTokenResponse) => void;
+  let rejectOAuth!: (err: Error) => void;
+  const oauthPromise = new Promise<MicrosoftTokenResponse>((res, rej) => {
+    resolveOAuth = res;
+    rejectOAuth = rej;
   });
+
+  let completed = false;
+
+  // Build the login page URL — the host page that contains the webview tag.
+  // Pass the Microsoft auth URL as a query param so the page can set the src.
+  // views:// URLs cannot have query strings in CEF — the query becomes part of
+  // the file path. Pass auth params via RPC instead (getAuthConfig request).
+  const loginPageUrl = "views://loginview/index.html";
+
+  // RPC for the login window — only two handlers needed:
+  //   notifyOAuthRedirect: preload detected the redirect, sends us the URL
+  //   cancelOAuth: user clicked the X button in the host page
+  const loginRpc = BrowserView.defineRPC<LoginRpcSchema>({
+    maxRequestTime: Infinity,
+    handlers: {
+      requests: {
+        // Called by the loginview on mount to get the OAuth URL to load.
+        // This avoids passing params via views:// query strings, which CEF
+        // interprets as part of the file path instead of a query string.
+        getAuthConfig: async () => ({
+          authUrl: authUrl.toString(),
+          redirectUri: REDIRECT_URI,
+        }),
+        notifyOAuthRedirect: async ({ url }) => {
+          console.log(`[OAUTH] notifyOAuthRedirect received: ${url}`);
+          if (completed) return { ok: false };
+          if (!url.startsWith(REDIRECT_URI)) return { ok: false };
+
+          let parsed: URL;
+          try {
+            parsed = new URL(url);
+          } catch {
+            return { ok: false };
+          }
+
+          const code = parsed.searchParams.get("code");
+          const oauthError = parsed.searchParams.get("error");
+          console.log(
+            `[OAUTH] code=${code ? "present" : "null"} error=${oauthError}`,
+          );
+
+          if (code) {
+            completed = true;
+            setTimeout(() => {
+              try {
+                loginWindow.close();
+              } catch {
+                /**/
+              }
+            }, 0);
+            exchangeCodeForTokens(code)
+              .then((tokens) => {
+                console.log("[OAUTH] Token exchange successful");
+                resolveOAuth(tokens);
+              })
+              .catch((err: Error) => {
+                console.error("[OAUTH] Token exchange failed:", err);
+                rejectOAuth(err);
+              });
+          } else if (oauthError) {
+            completed = true;
+            setTimeout(() => {
+              try {
+                loginWindow.close();
+              } catch {
+                /**/
+              }
+            }, 0);
+            rejectOAuth(new Error(`Microsoft login failed: ${oauthError}`));
+          }
+
+          return { ok: true };
+        },
+        cancelOAuth: async () => {
+          console.log("[OAUTH] cancelOAuth called from host page");
+          if (!completed) rejectOAuth(new Error("Login cancelled by user."));
+          return { ok: true };
+        },
+      },
+    },
+  });
+
+  const loginWindow = new BrowserWindow({
+    title: "Entrar com Microsoft",
+    url: loginPageUrl,
+    frame: { width: 480, height: 660, x: 400, y: 160 },
+    titleBarStyle: "default",
+    rpc: loginRpc,
+  });
+
+  loginWindow.setAlwaysOnTop(true);
+  console.log("[OAUTH] Login window opened:", loginPageUrl);
+
+  loginWindow.on("close", () => {
+    console.log(`[OAUTH] Window closed, completed=${completed}`);
+    if (!completed) rejectOAuth(new Error("Login cancelled by user."));
+  });
+
+  return oauthPromise;
 }
 
 // ─── AccountService ───────────────────────────────────────────────────────────

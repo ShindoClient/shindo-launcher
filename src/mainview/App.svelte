@@ -4,7 +4,11 @@
 	import SettingsPage from "./components/SettingsPage.svelte";
 	import TitleBar from "./components/TitleBar.svelte";
 	import UpdatePage from "./components/UpdatePage.svelte";
-	import { appState } from "./state/app.svelte";
+	import { appState, settingsState } from "./state/app.svelte";
+
+	$effect(() => {
+		document.documentElement.setAttribute("data-theme", settingsState.theme);
+	});
 </script>
 
 <TitleBar />

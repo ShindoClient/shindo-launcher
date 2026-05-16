@@ -24,7 +24,14 @@ export type AccountsStatePayload = {
 type NativeApi = {
   getState(): Promise<NativeState>;
   saveState(state: NativeState): Promise<{ ok: boolean }>;
-  checkLauncherUpdate(): Promise<{ ok: boolean; channel?: string }>;
+  checkLauncherUpdate(): Promise<{
+    ok: boolean;
+    channel?: string;
+    updateAvailable?: boolean;
+    updateReady?: boolean;
+    version?: string;
+    error?: string;
+  }>;
   downloadClient(request: NativeDownloadRequest): Promise<NativeDownloadResult>;
   ensureJava(params: {
     javaVersion: number;
@@ -41,6 +48,7 @@ type NativeApi = {
   selectAccount(payload: { accountId: string }): Promise<AccountsStatePayload>;
   minimizeWindow(): Promise<{ ok: boolean }>;
   closeWindow(): Promise<{ ok: boolean }>;
+  moveWindow(params: { dx: number; dy: number }): Promise<{ ok: boolean }>;
 };
 
 // ─── Shared ───────────────────────────────────────────────────────────────────
@@ -79,7 +87,7 @@ function fallbackApi(): NativeApi {
       return { ok: true };
     },
     async checkLauncherUpdate() {
-      return { ok: true, channel: "web-fallback" };
+      return { ok: true, channel: "web-fallback", updateAvailable: false };
     },
     async downloadClient(request) {
       for (let current = 0; current <= 100; current += 10) {
@@ -149,6 +157,9 @@ function fallbackApi(): NativeApi {
     },
     async closeWindow() {
       window.close();
+      return { ok: true };
+    },
+    async moveWindow() {
       return { ok: true };
     },
   };
@@ -226,6 +237,9 @@ function apiWithBootstrapState(
     },
     async closeWindow() {
       return primary.closeWindow();
+    },
+    async moveWindow(params) {
+      return primary.moveWindow(params);
     },
   };
 }

@@ -2,7 +2,8 @@ export type ReleaseChannel = "stable" | "dev" | "snapshot";
 export type AppPage = "update" | "home" | "settings" | "logs";
 export type LauncherStatus = "idle" | "downloading" | "launching" | "running";
 export type AccountType = "microsoft" | "offline";
-export type Locale = "en" | "pt" | "de";
+export type Locale = "en" | "pt-BR" | "pt-PT" | "de";
+export type Theme = "dark" | "light" | "high-contrast";
 
 export type ProgressPayload = {
   current: number;
@@ -42,6 +43,7 @@ export type LauncherSettings = {
   javaMode: "auto" | "manual";
   javaPath?: string;
   locale: Locale;
+  theme: Theme;
 };
 
 export type ClientRelease = {
@@ -102,7 +104,14 @@ export type ShindoRPCSchema = {
       saveState: { params: NativeState; response: { ok: boolean } };
       checkLauncherUpdate: {
         params: undefined;
-        response: { ok: boolean; channel?: string };
+        response: {
+          ok: boolean;
+          channel?: string;
+          updateAvailable?: boolean;
+          updateReady?: boolean;
+          version?: string;
+          error?: string;
+        };
       };
       downloadClient: {
         params: NativeDownloadRequest;
@@ -142,6 +151,10 @@ export type ShindoRPCSchema = {
       };
       minimizeWindow: { params: undefined; response: { ok: boolean } };
       closeWindow: { params: undefined; response: { ok: boolean } };
+      moveWindow: {
+        params: { dx: number; dy: number };
+        response: { ok: boolean };
+      };
     };
     messages: {};
   };

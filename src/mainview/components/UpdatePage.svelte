@@ -6,6 +6,7 @@
 		loadPersistedState,
 		savePersistedState,
 	} from "../services/persistence";
+	import { loadAccounts } from "../services/accounts";
 	import { fetchVersioning } from "../services/versioning";
 	import {
 		appState,
@@ -25,6 +26,7 @@
 		try {
 			updateState.label = "Loading local preferences";
 			hydrateState(await loadPersistedState());
+			await loadAccounts();
 
 			updateState.label = "Checking launcher update";
 			updateState.progress = { current: 15, total: 100, label: "Launcher" };

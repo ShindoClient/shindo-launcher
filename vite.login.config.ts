@@ -8,13 +8,9 @@ export default defineConfig({
       process.env.npm_package_version ?? "0.2.9",
     ),
   },
-  root: "src/mainview",
+  root: "src/loginview",
   build: {
-    outDir: "../../dist",
+    outDir: "../../dist/loginview",
     emptyOutDir: true,
-  },
-  server: {
-    port: 5173,
-    strictPort: true,
   },
 });

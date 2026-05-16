@@ -7,7 +7,8 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, existsSync } from "node:fs";
+import { dlopen, FFIType, suffix } from "bun:ffi";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { homedir, platform } from "node:os";
@@ -451,10 +452,67 @@ const rpc = BrowserView.defineRPC<ShindoRPCSchema>({
     requests: {
       getState: readState,
       saveState,
-      checkLauncherUpdate: async () => ({
-        ok: true,
-        channel: await Updater.localInfo.channel(),
-      }),
+      checkLauncherUpdate: async () => {
+        const localInfo = await Updater.getLocalInfo();
+
+        if (!localInfo.channel || localInfo.channel === "dev") {
+          return {
+            ok: true,
+            channel: localInfo.channel || "dev",
+            updateAvailable: false,
+          };
+        }
+
+        Updater.onStatusChange((entry) => {
+          const progressMap: Record<string, number> = {
+            checking: 0,
+            "check-complete": 10,
+            "update-available": 15,
+            "download-starting": 20,
+            "downloading-patch": 35,
+            "applying-patch": 50,
+            "downloading-full-bundle": 35,
+            "download-progress": 50,
+            decompressing: 70,
+            "download-complete": 80,
+            applying: 85,
+            extracting: 90,
+            "replacing-app": 95,
+            "launching-new-version": 99,
+            complete: 100,
+          };
+          sendProgress({
+            current: progressMap[entry.status] ?? 50,
+            total: 100,
+            label: entry.message,
+          });
+        });
+
+        const updateInfo = await Updater.checkForUpdate();
+
+        if (updateInfo.updateAvailable) {
+          await Updater.downloadUpdate();
+
+          const info = Updater.updateInfo();
+          if (info?.updateReady) {
+            sendProgress({
+              current: 95,
+              total: 100,
+              label: "Restarting with new version...",
+            });
+            await Updater.applyUpdate();
+          }
+        }
+
+        return {
+          ok: true,
+          channel: localInfo.channel,
+          updateAvailable: updateInfo.updateAvailable,
+          updateReady: updateInfo.updateReady ?? false,
+          version: updateInfo.version,
+          error: updateInfo.error,
+        };
+      },
       downloadClient,
       ensureJava,
       selectJavaExecutable: async () => ({}),
@@ -484,6 +542,13 @@ const rpc = BrowserView.defineRPC<ShindoRPCSchema>({
       },
       closeWindow: async () => {
         mainWindow?.close();
+        return { ok: true };
+      },
+      moveWindow: async ({ dx, dy }) => {
+        const frame = mainWindow?.getFrame();
+        if (frame) {
+          mainWindow?.setPosition(frame.x + dx, frame.y + dy);
+        }
         return { ok: true };
       },
     },

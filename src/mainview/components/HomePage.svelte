@@ -34,6 +34,12 @@
 	let microsoftLoginInProgress = $state(false);
 	let accountError = $state<string | null>(null);
 
+	const longestUsername = $derived.by(() => {
+		const names = accountState.accounts.map((a) => a.username.length);
+		return Math.max(names.length > 0 ? Math.max(...names) : 0, "Account".length, "Add account".length);
+	});
+	const dropdownWidth = $derived(`${Math.max(longestUsername * 7 + 52, 200)}px`);
+
 	const launchLabel = $derived(
 		{
 			idle: t("home.launch"),
@@ -92,36 +98,58 @@
 <section class="home-page">
 	<header class="topbar">
 		<div></div>
-		<div class="account">
+		<div class="account" style="min-width: {dropdownWidth}">
 			<button
 				class="account-button"
 				onclick={() =>
 					(appState.isAccountMenuOpen = !appState.isAccountMenuOpen)}
 			>
-				<User size={17} />
+				{#if getActiveAccount()?.type === "offline"}
+					<img class="avatar-small" src="https://mc-heads.net/avatar/steve" alt="" />
+				{:else if getActiveAccount()?.skinUrl}
+					<img class="avatar-small" src={getActiveAccount()!.skinUrl!} alt="" />
+				{:else}
+					<User size={17} />
+				{/if}
 				<span>{getActiveAccount()?.username ?? "Account"}</span>
 			</button>
 			{#if appState.isAccountMenuOpen}
 				<div class="account-menu">
-					{#each accountState.accounts as account}
+					{#each accountState.accounts as account, i}
 						<div class="account-row">
 							<button
 								class:active={account.id === accountState.activeAccountId}
-								onclick={() => activateAccount(account.id)}
+								onclick={() => {
+									activateAccount(account.id);
+									appState.isAccountMenuOpen = false;
+								}}
 							>
-								<span>{account.username}</span>
+								<span class="account-info">
+									{#if account.type === "offline"}
+										<img class="avatar-tiny" src="https://mc-heads.net/avatar/steve" alt="" />
+									{:else}
+										<img class="avatar-tiny" src={account.skinUrl} alt="" />
+									{/if}
+									<span>{account.username}</span>
+								</span>
 								<small>{account.type}</small>
 							</button>
 							<button
-								class="icon-button danger"
+								class="account-delete"
 								aria-label="Remove account"
-								onclick={() => removeAccount(account.id)}
+								onclick={(e) => {
+									e.stopPropagation();
+									removeAccount(account.id);
+								}}
 							>
-								<Trash2 size={15} />
+								<Trash2 size={13} />
 							</button>
 						</div>
+						{#if i < accountState.accounts.length - 1}
+							<hr class="account-divider">
+						{/if}
 					{/each}
-					<button class="wide add-account" onclick={() => (accountModal = "choose")}>
+					<button class="add-account-btn" onclick={() => (accountModal = "choose")}>
 						<Plus size={15} />
 						Add account
 					</button>
