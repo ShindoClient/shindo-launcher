@@ -572,13 +572,13 @@ button:disabled {
 	position: fixed;
 	left: 50%;
 	bottom: 36px;
-	width: min(620px, calc(100vw - 96px));
+	width: min(760px, calc(100vw - 96px));
 	transform: translateX(-50%);
 }
 
 .launch-combo {
 	display: grid;
-	grid-template-columns: 1fr 72px;
+	grid-template-columns: 1fr 160px 72px;
 	height: 82px;
 	overflow: hidden;
 	border-radius: 8px;
@@ -594,16 +594,31 @@ button:disabled {
 }
 
 .launch-button,
-.selector-button {
+.selector-button,
+.discord-button {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	color: var(--text-inverse);
 	background: var(--accent);
+	text-decoration: none;
 }
 
 .launch-button {
 	gap: 16px;
+}
+
+.discord-button {
+	font-size: 16px;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	border-left: 1px solid rgba(255, 255, 255, 0.08);
+	transition: background 160ms ease, transform 160ms ease;
+}
+
+.discord-button:hover {
+	background: color-mix(in srgb, var(--accent) 88%, black 12%);
+	transform: translateY(-1px);
 }
 
 .launch-button span {

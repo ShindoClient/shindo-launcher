@@ -48,9 +48,9 @@
 
 <svelte:window onpointermove={onPointerMove} onpointerup={onPointerUp} />
 
-<header bind:this={headerEl} class="titlebar" onpointerdown={onPointerDown}>
+<header bind:this={headerEl} class="titlebar" role="banner" onpointerdown={onPointerDown}>
 	<div class="titlebar-brand">
-		<img src="/brand/logo.png" alt="" />
+		<img src="./brand/logo.png" alt="" />
 		<span>Shindo Launcher</span>
 		<small>v{launcherVersion}</small>
 	</div>
