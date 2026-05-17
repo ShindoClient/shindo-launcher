@@ -186,6 +186,14 @@
 					<small>{launchSubLabel}</small>
 				</span>
 			</button>
+			<a
+				class="discord-button"
+				href="https://discord.com/invite/uU56tvtXMU"
+				target="_blank"
+				rel="noreferrer noopener"
+			>
+				Discord
+			</a>
 			<button
 				class="selector-button"
 				onclick={() =>

@@ -24,6 +24,7 @@ export default {
       // loginview — standalone OAuth window bundled by Vite as a second entry
       "dist/loginview/index.html": "views/loginview/index.html",
       "dist/loginview/assets": "views/loginview/assets",
+      "dist/loginview/preload.js": "views/loginview/preload.js",
     },
     // Ignore Vite output in watch mode — HMR handles view rebuilds separately
     watchIgnore: ["dist/**"],

@@ -23,29 +23,6 @@
             });
     });
 
-    const preloadScript = $derived(`
-(function () {
-  var REDIRECT = ${JSON.stringify(redirectUri)};
-  function report(url) {
-    if (url && url.startsWith(REDIRECT)) {
-      console.log('[PRELOAD] Redirect detected: ' + url);
-      if (typeof window.__electrobunSendToHost === 'function') {
-        window.__electrobunSendToHost({ type: 'oauth-redirect', url: url });
-      } else {
-        setTimeout(function () {
-          window.__electrobunSendToHost?.({ type: 'oauth-redirect', url: url });
-        }, 50);
-      }
-    }
-  }
-  report(window.location.href);
-  var _assign  = window.location.assign.bind(window.location);
-  var _replace = window.location.replace.bind(window.location);
-  window.location.assign  = function (u) { report(u); return _assign(u); };
-  window.location.replace = function (u) { report(u); return _replace(u); };
-})();
-`);
-
     let webviewEl = $state<any>(null);
 
     $effect(() => {
@@ -97,7 +74,8 @@
             bind:this={webviewEl}
             renderer="cef"
             partition="ms-login"
-            preload={preloadScript}
+            preload="preload.js"
+            masks=".titlebar"
             src={authUrl}
         ></electrobun-webview>
     {:else}
@@ -141,6 +119,8 @@
         -webkit-app-region: drag;
         app-region: drag;
         user-select: none;
+        position: relative;
+        z-index: 1;
     }
     .titlebar span {
         font-size: 13px;
