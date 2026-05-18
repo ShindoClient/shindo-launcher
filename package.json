@@ -4,16 +4,26 @@
   "type": "module",
   "description": "Shindo Client launcher built with Electrobun and Svelte 5",
   "scripts": {
+<<<<<<< HEAD
     "start": "vite build && vite build --config vite.login.config.ts && electrobun dev --watch",
     "dev": "bun run start",
+=======
+    "fixed": "vite build && vite build --config vite.login.config.ts && electrobun dev",
+    "start": "WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 bun fixed",
+    "dev": "electrobun dev --watch",
+>>>>>>> parent of 8502e7c (feat: more fixes + vitest)
     "dev:hmr": "concurrently \"bun run hmr\" \"bun run start\"",
     "hmr": "vite --port 5173",
     "build": "vite build && vite build --config vite.login.config.ts && electrobun build --env=stable",
     "build:prod": "bun run build",
     "build:stable": "vite build && electrobun build --env=stable",
+<<<<<<< HEAD
     "build:canary": "vite build && electrobun build --env=canary",
     "test": "vitest run",
     "test:watch": "vitest"
+=======
+    "build:canary": "vite build && electrobun build --env=canary"
+>>>>>>> parent of 8502e7c (feat: more fixes + vitest)
   },
   "dependencies": {
     "@lucide/svelte": "^1.16.0",
@@ -22,15 +32,11 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/svelte": "^5.3.1",
     "@types/bun": "latest",
     "@types/three": "^0.184.1",
     "concurrently": "^9.2.1",
-    "jsdom": "^29.1.1",
     "svelte": "^5.55.7",
     "typescript": "^5.9.3",
-    "vite": "^6.4.2",
-    "vitest": "^4.1.6"
+    "vite": "^6.4.2"
   }
 }
