@@ -14,14 +14,13 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "moduleResolution": "bundler",
-    "baseUrl": ".",
+    "moduleResolution": "bundler"
   },
   "include": [
     "src",
     "electrobun.config.ts",
     "vite.login.config.ts",
-    "vite.config.ts",
+    "vite.config.ts"
   ],
-  "exclude": ["node_modules", "dist", "build", "../../package/dist"],
+  "exclude": ["node_modules", "dist", "build", "../../package/dist"]
 }
